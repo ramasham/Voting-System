@@ -1,46 +1,93 @@
 const ipaddr = require('ipaddr.js');
-
-function configuredRanges() {
-    const value = process.env.ALLOWED_IP_RANGES;
-    if (!value || !value.trim()) throw new Error('ALLOWED_IP_RANGES is not configured');
-
-    return value.split(',').map((range) => {
-        const trimmed = range.trim();
-        if (!trimmed) throw new Error('ALLOWED_IP_RANGES contains an empty range');
-        return ipaddr.parseCIDR(trimmed);
-    });
-}
+const pool = require('../../db/connection');
+const { parsePositiveInteger } = require('../utils/validation');
 
 function normalizeIp(ip) {
     const address = ipaddr.parse(ip);
-    return address.kind() === 'ipv6' && address.isIPv4MappedAddress()
-        ? address.toIPv4Address()
-        : address;
+
+    if (
+        address.kind() === 'ipv6' &&
+        address.isIPv4MappedAddress()
+    ) {
+        return address.toIPv4Address();
+    }
+
+    return address;
 }
 
-function venueAccess(req, res, next) {
-    let ranges;
-    try {
-        ranges = configuredRanges();
-    } catch (error) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error(`[venue-access] configuration error: ${error.message}`);
-        }
-        return res.status(503).json({
+function ipIsAllowed(clientIp, configuredRanges) {
+    const clientAddress = normalizeIp(clientIp);
+
+    const ranges = configuredRanges
+        .split(',')
+        .map((range) => range.trim())
+        .filter(Boolean);
+
+    return ranges.some((range) => {
+        const [networkAddress, prefixLength] =
+            ipaddr.parseCIDR(range);
+
+        return (
+            clientAddress.kind() === networkAddress.kind() &&
+            clientAddress.match(networkAddress, prefixLength)
+        );
+    });
+}
+
+async function venueAccess(req, res, next) {
+    const eventId = parsePositiveInteger(req.params.eventId);
+
+    if (!eventId) {
+        return res.status(400).json({
             success: false,
-            code: 'VENUE_ACCESS_UNAVAILABLE',
-            message: 'Venue access cannot be verified'
+            code: 'INVALID_EVENT_ID',
+            message: 'A valid eventId is required for venue access'
         });
     }
 
     try {
-        const clientAddress = normalizeIp(req.ip);
-        const allowed = ranges.some(([network, prefix]) =>
-            clientAddress.kind() === network.kind() && clientAddress.match(network, prefix)
+        const result = await pool.query(
+            `
+                SELECT allowed_ip_ranges, location_enabled
+                FROM event_settings
+                WHERE event_id = $1
+            `,
+            [eventId]
         );
 
-        if (!allowed) {
-            if (process.env.NODE_ENV !== 'production') console.info('[venue-access] request denied');
+        if (result.rowCount === 0) {
+            return res.status(503).json({
+                success: false,
+                code: 'VENUE_ACCESS_NOT_CONFIGURED',
+                message: 'Venue access is not configured for this event'
+            });
+        }
+
+        const {
+            allowed_ip_ranges: allowedRanges,
+            location_enabled: locationEnabled
+        } = result.rows[0];
+
+        if (locationEnabled) {
+            return res.status(503).json({
+                success: false,
+                code: 'LOCATION_CHECK_UNAVAILABLE',
+                message:
+                    'Location verification is enabled but is not configured by this server'
+            });
+        }
+
+        if (!allowedRanges || allowedRanges.trim() === '') {
+            return res.status(503).json({
+                success: false,
+                code: 'VENUE_ACCESS_NOT_CONFIGURED',
+                message: 'Allowed venue IP ranges have not been configured'
+            });
+        }
+
+        const clientIp = req.ip;
+
+        if (!clientIp || !ipIsAllowed(clientIp, allowedRanges)) {
             return res.status(403).json({
                 success: false,
                 code: 'OUTSIDE_VENUE',
@@ -48,18 +95,21 @@ function venueAccess(req, res, next) {
             });
         }
 
-        if (process.env.NODE_ENV !== 'production') console.info('[venue-access] request allowed');
+        if (process.env.NODE_ENV !== 'production') {
+            console.info('[venue-access] request allowed');
+        }
+
         return next();
     } catch (error) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error(`[venue-access] client IP could not be verified: ${error.message}`);
-        }
-        return res.status(403).json({
+        console.error('Venue access check failed:', error.message);
+
+        return res.status(503).json({
             success: false,
-            code: 'OUTSIDE_VENUE',
-            message: 'Voting is only available inside the venue'
+            code: 'VENUE_ACCESS_UNAVAILABLE',
+            message: 'Unable to verify venue access right now'
         });
     }
 }
 
 module.exports = venueAccess;
+module.exports.ipIsAllowed = ipIsAllowed;
