@@ -24,7 +24,8 @@ async function ensureSettings(eventId) {
 
   const result = await pool.query(
     `SELECT event_id, voting_start_at, voting_end_at, voting_enabled,
-            allowed_ip_ranges, location_enabled, location_config
+            allowed_ip_ranges, location_enabled, location_config,
+            location_sample_count, location_ready_at IS NOT NULL AS location_ready
      FROM event_settings
      WHERE event_id = $1`,
     [eventId]
@@ -58,15 +59,11 @@ async function updateSettings(req, res) {
   if (Object.keys(body).some((field) => !allowedFields.includes(field))) {
     return res.status(400).json({ success: false, message: 'Request contains an unsupported field' });
   }
-  if (body.locationEnabled === true) {
-    return res.status(501).json({
-      success: false,
-      code: 'GEOLOCATION_NOT_IMPLEMENTED',
-      message: 'This server currently supports venue IP ranges, not GPS geofencing',
-    });
-  }
-  if (Object.hasOwn(body, 'locationEnabled') && body.locationEnabled !== false) {
-    return res.status(400).json({ success: false, message: 'locationEnabled must be false' });
+  if (
+    Object.hasOwn(body, 'locationEnabled') &&
+    typeof body.locationEnabled !== 'boolean'
+  ) {
+    return res.status(400).json({ success: false, message: 'locationEnabled must be a boolean' });
   }
 
   const assignments = [];
@@ -85,9 +82,9 @@ async function updateSettings(req, res) {
       assignments.push(`allowed_ip_ranges = $${values.length}`);
     }
     if (Object.hasOwn(body, 'locationEnabled')) {
-      values.push(false);
+      values.push(body.locationEnabled);
       assignments.push(`location_enabled = $${values.length}`);
-      assignments.push('location_config = NULL');
+      if (!body.locationEnabled) assignments.push('location_config = NULL');
     }
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
@@ -129,7 +126,8 @@ async function updateSettings(req, res) {
        SET ${assignments.join(', ')}
        WHERE event_id = $1
        RETURNING event_id, voting_start_at, voting_end_at, voting_enabled,
-                 allowed_ip_ranges, location_enabled, location_config`,
+                 allowed_ip_ranges, location_enabled, location_config,
+                 location_sample_count, location_ready_at IS NOT NULL AS location_ready`,
       values
     );
 
@@ -165,7 +163,7 @@ async function openVoting(req, res) {
          AND voting_end_at IS NOT NULL
          AND allowed_ip_ranges IS NOT NULL
          AND BTRIM(allowed_ip_ranges) <> ''
-         AND location_enabled = FALSE
+         AND (location_enabled = FALSE OR location_zone IS NOT NULL)
          AND CURRENT_TIMESTAMP >= voting_start_at
          AND CURRENT_TIMESTAMP < voting_end_at
        RETURNING event_id, voting_start_at, voting_end_at, voting_enabled`,
@@ -177,7 +175,8 @@ async function openVoting(req, res) {
     }
 
     const settingsResult = await pool.query(
-      `SELECT voting_start_at, voting_end_at, allowed_ip_ranges, location_enabled
+      `SELECT voting_start_at, voting_end_at, allowed_ip_ranges, location_enabled,
+              location_zone IS NOT NULL AS location_ready
        FROM event_settings WHERE event_id = $1`,
       [eventId]
     );
@@ -202,11 +201,13 @@ async function openVoting(req, res) {
       });
     }
     if (settings.location_enabled) {
-      return res.status(409).json({
-        success: false,
-        code: 'GEOLOCATION_NOT_IMPLEMENTED',
-        message: 'Disable GPS geofencing; this server supports venue IP ranges only',
-      });
+      if (!settings.location_ready) {
+        return res.status(409).json({
+          success: false,
+          code: 'LOCATION_ZONE_NOT_READY',
+          message: 'Collect the organizer anchor and at least two trusted network samples before opening voting',
+        });
+      }
     }
     return res.status(409).json({
       success: false,

@@ -1,6 +1,7 @@
 const pool = require('../../db/connection');
 const { parsePositiveInteger } = require('../utils/validation');
 const venueAccess = require('../middleware/venueAccess.middleware');
+const locationVerification = require('../services/locationVerification');
 
 async function castVote(req, res) {
   const eventId = parsePositiveInteger(req.params.eventId);
@@ -35,6 +36,7 @@ async function castVote(req, res) {
       `
       SELECT voting_enabled, voting_start_at, voting_end_at,
              allowed_ip_ranges, location_enabled,
+             location_zone IS NOT NULL AS location_ready,
              voting_start_at IS NOT NULL AND CURRENT_TIMESTAMP >= voting_start_at AS window_started,
              voting_end_at IS NOT NULL AND CURRENT_TIMESTAMP < voting_end_at AS window_not_ended
       FROM event_settings
@@ -54,25 +56,61 @@ async function castVote(req, res) {
     }
 
     const settings = settingsResult.rows[0];
-    if (settings.location_enabled) {
-      await client.query('ROLLBACK');
-      return res.status(503).json({
-        success: false,
-        code: 'LOCATION_CHECK_UNAVAILABLE',
-        message: 'Location verification is enabled but is not supported by this server',
-      });
-    }
-    if (
-      !settings.allowed_ip_ranges ||
-      !req.ip ||
-      !venueAccess.ipIsAllowed(req.ip, settings.allowed_ip_ranges)
-    ) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({
-        success: false,
-        code: 'OUTSIDE_VENUE',
-        message: 'Voting is only available inside the venue',
-      });
+    const trustedNetwork = Boolean(
+      settings.allowed_ip_ranges && req.ip &&
+      venueAccess.ipIsAllowed(req.ip, settings.allowed_ip_ranges)
+    );
+    if (!trustedNetwork) {
+      if (!settings.location_enabled) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          success: false,
+          code: 'OUTSIDE_VENUE',
+          message: 'Voting is only available from the event network or detected event zone',
+        });
+      }
+
+      if (!settings.location_ready) {
+        await client.query('ROLLBACK');
+        return res.status(503).json({
+          success: false,
+          code: 'LOCATION_ZONE_NOT_READY',
+          message: 'GPS voting will be available after enough trusted location samples are collected',
+        });
+      }
+
+      const coordinates = locationVerification.parseCoordinates(req.body);
+      if (!coordinates) {
+        await client.query('ROLLBACK');
+        const suppliedCoordinates = req.body &&
+          (Object.hasOwn(req.body, 'latitude') || Object.hasOwn(req.body, 'longitude'));
+        return res.status(suppliedCoordinates ? 400 : 403).json({
+          success: false,
+          code: suppliedCoordinates ? 'INVALID_LOCATION' : 'LOCATION_REQUIRED',
+          message: suppliedCoordinates
+            ? 'Latitude and longitude must be valid numeric coordinates'
+            : 'Provide a current GPS location to vote outside the event network',
+        });
+      }
+
+      const locationResult = await client.query(
+        `SELECT ST_Covers(
+                  location_zone,
+                  ST_SetSRID(ST_MakePoint($2, $3), 4326)
+                ) AS inside_zone
+         FROM event_settings
+         WHERE event_id = $1`,
+        [eventId, coordinates.longitude, coordinates.latitude]
+      );
+
+      if (!locationResult.rows[0]?.inside_zone) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          success: false,
+          code: 'OUTSIDE_EVENT_ZONE',
+          message: 'Your GPS location is outside the detected event zone',
+        });
+      }
     }
 
     if (!settings.voting_enabled || !settings.window_started || !settings.window_not_ended) {

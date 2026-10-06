@@ -4,6 +4,7 @@ const adminApiRateLimit = require('../middleware/adminApiRateLimit');
 const adminAuthController = require('../controllers/adminAuth.controller');
 const adminContentController = require('../controllers/adminContent.controller');
 const adminEventsController = require('../controllers/adminEvents.controller');
+const locationController = require('../controllers/location.controller');
 
 const router = express.Router();
 
@@ -13,6 +14,7 @@ router.use(authenticate('admin'), adminApiRateLimit);
 
 router.get('/events/:eventId/settings', adminEventsController.getSettings);
 router.patch('/events/:eventId/settings', adminEventsController.updateSettings);
+router.post('/events/:eventId/location/anchor', locationController.captureOrganizerAnchor);
 router.post('/events/:eventId/voting/open', adminEventsController.openVoting);
 router.post('/events/:eventId/voting/close', adminEventsController.closeVoting);
 

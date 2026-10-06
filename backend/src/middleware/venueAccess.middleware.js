@@ -39,7 +39,7 @@ async function venueAccess(req, res, next) {
   try {
     const result = await pool.query(
       `
-      SELECT allowed_ip_ranges, location_enabled
+      SELECT allowed_ip_ranges
       FROM event_settings
       WHERE event_id = $1
       `,
@@ -54,14 +54,7 @@ async function venueAccess(req, res, next) {
       });
     }
 
-    const { allowed_ip_ranges: allowedRanges, location_enabled: locationEnabled } = result.rows[0];
-    if (locationEnabled) {
-      return res.status(503).json({
-        success: false,
-        code: 'LOCATION_CHECK_UNAVAILABLE',
-        message: 'Location verification is enabled but is not configured by this server',
-      });
-    }
+    const { allowed_ip_ranges: allowedRanges } = result.rows[0];
 
     if (!allowedRanges || allowedRanges.trim() === '') {
       return res.status(503).json({
