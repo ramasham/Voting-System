@@ -6,9 +6,7 @@ function positiveNumber(value, fallback) {
 function createRateLimiter({ name, max, windowMs }) {
     const requests = new Map();
 
-    return function rateLimit(req, res, next) {
-        const now = Date.now();
-        const key = req.ip || req.socket.remoteAddress || 'unknown';
+    function consume(key, now = Date.now()) {
         const current = requests.get(key);
         const entry = !current || now >= current.resetAt
             ? { count: 0, resetAt: now + windowMs }
@@ -24,10 +22,21 @@ function createRateLimiter({ name, max, windowMs }) {
             }
         }
 
-        res.set('RateLimit-Limit', String(max));
-        res.set('RateLimit-Remaining', String(Math.max(0, max - entry.count)));
-        res.set('RateLimit-Reset', String(Math.ceil(entry.resetAt / 1000)));
-        if (entry.count > max) {
+        return {
+            allowed: entry.count <= max,
+            limit: max,
+            remaining: Math.max(0, max - entry.count),
+            resetAt: entry.resetAt
+        };
+    }
+
+    function rateLimit(req, res, next) {
+        const result = consume(req.ip || req.socket.remoteAddress || 'unknown');
+
+        res.set('RateLimit-Limit', String(result.limit));
+        res.set('RateLimit-Remaining', String(result.remaining));
+        res.set('RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)));
+        if (!result.allowed) {
             return res.status(429).json({
                 success: false,
                 code: 'RATE_LIMITED',
@@ -35,7 +44,10 @@ function createRateLimiter({ name, max, windowMs }) {
             });
         }
         return next();
-    };
+    }
+
+    rateLimit.consume = consume;
+    return rateLimit;
 }
 
 const otpRateLimit = createRateLimiter({

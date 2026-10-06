@@ -102,38 +102,36 @@ async function getEventExhibitors(req, res) {
     const result = await pool.query(
       `
       SELECT
-        exhibitors.id,
-        exhibitors.event_id,
-        exhibitors.name,
-        exhibitors.description,
-        exhibitors.image_url,
-        categories.id AS category_id,
-        categories.name AS category_name
-      FROM exhibitors
-      JOIN categories
-        ON categories.id = exhibitors.category_id
-       AND categories.event_id = exhibitors.event_id
-      WHERE exhibitors.event_id = $1
-      ORDER BY categories.display_order NULLS LAST, categories.id, exhibitors.name
+        e.id,
+        e.event_id,
+        e.name,
+        e.description,
+        e.image_url,
+        COUNT(c.id)::int AS "categoriesCount",
+        COALESCE(
+          json_agg(
+            json_build_object('id', c.id, 'name', c.name)
+            ORDER BY c.display_order NULLS LAST, c.id
+          ) FILTER (WHERE c.id IS NOT NULL),
+          '[]'::json
+        ) AS categories
+      FROM exhibitors e
+      LEFT JOIN exhibitor_category_assignments eca
+        ON eca.event_id = e.event_id
+       AND eca.exhibitor_id = e.id
+      LEFT JOIN categories c
+        ON c.event_id = eca.event_id
+       AND c.id = eca.category_id
+      WHERE e.event_id = $1
+      GROUP BY e.id, e.event_id, e.name, e.description, e.image_url
+      ORDER BY e.name
       `,
       [eventId]
     );
 
-    const exhibitors = result.rows.map((row) => ({
-      id: row.id,
-      event_id: row.event_id,
-      name: row.name,
-      description: row.description,
-      image_url: row.image_url,
-      category: {
-        id: row.category_id,
-        name: row.category_name,
-      },
-    }));
-
     return res.status(200).json({
       success: true,
-      data: exhibitors,
+      data: result.rows,
     });
   } catch (error) {
     console.error(`Failed to load exhibitors for event ${eventId}:`, error);

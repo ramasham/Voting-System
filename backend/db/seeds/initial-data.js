@@ -26,32 +26,32 @@ const categorySeeds = [
 
 const exhibitorSeeds = [
   {
-    categoryOrder: 1,
+    categoryOrders: [1],
     name: 'Smart Irrigation System',
     description: 'A sensor-based system that waters plants when the soil is dry.',
   },
   {
-    categoryOrder: 1,
+    categoryOrders: [1],
     name: 'Recycled Plastic Filament Maker',
     description: 'A machine that turns recycled plastic into 3D-printer filament.',
   },
   {
-    categoryOrder: 2,
+    categoryOrders: [2, 3],
     name: 'Gesture-Controlled Robot',
     description: 'A small robot controlled by hand movements.',
   },
   {
-    categoryOrder: 2,
+    categoryOrders: [2],
     name: 'AI Plant Health Assistant',
     description: 'A prototype that uses images to identify common plant problems.',
   },
   {
-    categoryOrder: 3,
+    categoryOrders: [3],
     name: 'Interactive LED Art Wall',
     description: 'A colorful display that responds to visitors’ movement.',
   },
   {
-    categoryOrder: 3,
+    categoryOrders: [3],
     name: 'Assistive Grip Adapter',
     description: 'A 3D-printed aid designed to make everyday tools easier to hold.',
   },
@@ -124,7 +124,7 @@ async function upsertCategory(client, eventId, category) {
   return inserted.rows[0].id;
 }
 
-async function upsertExhibitor(client, eventId, categoryId, exhibitor) {
+async function upsertExhibitor(client, eventId, categoryIds, exhibitor) {
   const existing = await client.query(
     `
     SELECT id
@@ -140,22 +140,48 @@ async function upsertExhibitor(client, eventId, categoryId, exhibitor) {
     await client.query(
       `
       UPDATE exhibitors
-      SET category_id = $1, description = $2
-      WHERE id = $3
+      SET description = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE event_id = $2 AND id = $3
       `,
-      [categoryId, exhibitor.description, existing.rows[0].id]
+      [exhibitor.description, eventId, existing.rows[0].id]
     );
-
-    return;
+  } else {
+    await client.query(
+      `
+      INSERT INTO exhibitors (event_id, name, description)
+      VALUES ($1, $2, $3)
+      RETURNING id
+      `,
+      [eventId, exhibitor.name, exhibitor.description]
+    );
   }
 
-  await client.query(
+  const exhibitorResult = await client.query(
     `
-    INSERT INTO exhibitors (event_id, category_id, name, description)
-    VALUES ($1, $2, $3, $4)
+    SELECT id
+    FROM exhibitors
+    WHERE event_id = $1 AND name = $2
+    ORDER BY id
+    LIMIT 1
     `,
-    [eventId, categoryId, exhibitor.name, exhibitor.description]
+    [eventId, exhibitor.name]
   );
+
+  const exhibitorId = exhibitorResult.rows[0].id;
+  for (const categoryId of categoryIds) {
+    await client.query(
+      `
+      INSERT INTO exhibitor_category_assignments (
+        event_id,
+        exhibitor_id,
+        category_id
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (event_id, exhibitor_id, category_id) DO NOTHING
+      `,
+      [eventId, exhibitorId, categoryId]
+    );
+  }
 }
 
 async function ensureEventSettings(client, eventId) {
@@ -201,8 +227,10 @@ async function seed() {
     }
 
     for (const exhibitor of exhibitorSeeds) {
-      const categoryId = categoryIds.get(exhibitor.categoryOrder);
-      await upsertExhibitor(client, eventId, categoryId, exhibitor);
+      const assignedCategoryIds = exhibitor.categoryOrders.map(
+        (order) => categoryIds.get(order)
+      );
+      await upsertExhibitor(client, eventId, assignedCategoryIds, exhibitor);
     }
 
     await ensureEventSettings(client, eventId);
