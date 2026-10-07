@@ -33,7 +33,7 @@ The catalog adapter combines categories and exhibitors. A multi-category exhibit
 
 Identical vote retries return the existing vote without increasing counts. Changing an already-cast category vote is rejected with `DUPLICATE_VOTE`; the adapter reloads the visitor's votes. Other errors include `INVALID_OR_EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, `INVALID_TOKEN`, `VOTING_CLOSED`, `OUTSIDE_VENUE`, `LOCATION_REQUIRED`, `LOCATION_INACCURATE`, `LOCATION_NOT_READY`, and `RATE_LIMITED`. `LOCATION_NOT_READY` means GPS-only access is blocked while the venue zone is being established; approved network access remains available.
 
-When location verification is enabled, the frontend requests location after **Start voting**, including after a successful network check. Coordinates are cached for the selected event and sent for venue checks and votes. The frontend does not submit visitor samples. One authenticated admin capture with accuracy of 100 metres or better immediately creates the approved 100-metre venue zone. The legacy sample endpoint retains its verified-phone, approved-network, accuracy and one-sample-per-visitor checks, but visitor positions cannot change the zone.
+After **Start voting**, a successful server network check verifies venue access directly. The frontend requests location only when there is no approved network match and location verification is enabled. Coordinates are cached for the selected event and sent for venue checks and votes. The frontend does not submit visitor samples. One authenticated admin capture with accuracy of 100 metres or better immediately creates the approved 100-metre venue zone. The legacy sample endpoint retains its verified-phone, approved-network, accuracy and one-sample-per-visitor checks, but visitor positions cannot change the zone.
 
 ## Staff endpoints
 
@@ -44,6 +44,7 @@ Every endpoint below requires a staff token.
 | Method and path | Request / result |
 | --- | --- |
 | `GET /admin/me` | `{ id, username, mfa_enabled, mfa_available }` |
+| `GET /admin/network` | `{ ip, cidr }`; exact server-observed client address, using configured proxy trust; IPv4 `/32` or IPv6 `/128`; does not update settings |
 | `POST /admin/mfa/setup` | `{ password }`; reauthenticates and returns `{ secret, otpauthUrl }` for ten-minute enrollment |
 | `POST /admin/mfa/confirm` | `{ code }`; atomically enables the verified pending secret |
 | `GET /admin/events/:eventId/settings` | Voting window, venue CIDRs, location readiness, enabled flags |

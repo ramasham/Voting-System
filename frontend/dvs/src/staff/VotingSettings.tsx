@@ -37,6 +37,7 @@ export default function VotingSettings({
   const [location, setLocation] = useState(settings.location_enabled)
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [capturingNetwork, setCapturingNetwork] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const status = votingStatus(settings)
@@ -71,6 +72,29 @@ export default function VotingSettings({
         }),
       t.saved,
     )
+  }
+  const addCurrentNetwork = async () => {
+    setBusy(true)
+    setCapturingNetwork(true)
+    setError("")
+    setNotice("")
+    try {
+      const { cidr } = await staffApi.currentNetwork(token)
+      setRanges((current) => {
+        const existing = current
+          .split(",")
+          .map((range) => range.trim())
+          .filter(Boolean)
+        return existing.includes(cidr) ? current : [...existing, cidr].join(", ")
+      })
+      setNotice(t.networkAdded)
+    } catch (error) {
+      if (isExpired(error)) onExpired()
+      else setError(staffError(error, lang))
+    } finally {
+      setBusy(false)
+      setCapturingNetwork(false)
+    }
   }
   const anchor = () => {
     setError("")
@@ -186,6 +210,15 @@ export default function VotingSettings({
             />
             <small>{t.ipHint}</small>
           </label>
+          <button
+            className="staff-button staff-button--outline"
+            type="button"
+            disabled={busy || staffMode === "mock"}
+            onClick={() => void addCurrentNetwork()}
+          >
+            {capturingNetwork ? t.detectingNetwork : t.addCurrentNetwork}
+          </button>
+          <p className="staff-hint">{t.currentNetworkHint}</p>
           <label className="staff-switch">
             <input
               type="checkbox"
@@ -235,7 +268,7 @@ export default function VotingSettings({
             className="staff-button staff-button--primary"
             disabled={busy}
           >
-            {busy ? t.saving : t.save}
+            {capturingNetwork ? t.detectingNetwork : busy ? t.saving : t.save}
             <StaffIcon name="check" size={18} />
           </button>
         </div>

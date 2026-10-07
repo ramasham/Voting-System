@@ -86,7 +86,12 @@ export const staffCopy = {
     venueBody:
       "يسمح الخادم بالتصويت من شبكة المعرض المعتمدة أو من الموقع المعتمد عند تفعيله.",
     ipRanges: "نطاقات شبكة المعرض",
-    ipHint: "أدخل نطاقات CIDR مفصولة بفاصلة. مثال: 192.168.1.0/24",
+    ipHint: "استخدم عنوان الشبكة العام، وليس عنوانها المحلي. يمكنك إضافة نطاقات CIDR مفصولة بفاصلة.",
+    addCurrentNetwork: "إضافة الشبكة الحالية",
+    detectingNetwork: "جارٍ تحديد الشبكة…",
+    networkAdded: "تمت إضافة الشبكة إلى الحقل. اضغط حفظ الإعدادات لاعتمادها.",
+    currentNetworkHint:
+      "اتصل بشبكة المعرض أو نقطة الاتصال التي ستستخدمها في العرض، ثم أضفها واحفظ الإعدادات. يستطيع الكمبيوتر التصويت عبر الشبكة المعتمدة دون الحاجة إلى موقع دقيق.",
     locationEnabled: "تفعيل التحقّق من الموقع",
     ready: "جاهز",
     learning: "بانتظار تسجيل موقع المعرض",
@@ -285,7 +290,12 @@ export const staffCopy = {
     venueBody:
       "The server permits voting from the approved venue network or the approved location when enabled.",
     ipRanges: "Venue network ranges",
-    ipHint: "Enter comma-separated CIDR ranges. For example: 192.168.1.0/24",
+    ipHint: "Use the network's public address, rather than its local address. Separate CIDR ranges with commas.",
+    addCurrentNetwork: "Add this network",
+    detectingNetwork: "Finding your network…",
+    networkAdded: "Network added to the field. Save settings to approve it.",
+    currentNetworkHint:
+      "Connect to the venue Wi-Fi or the hotspot you will use for the presentation, then add it and save settings. Computers can vote through the approved network without a precise location.",
     locationEnabled: "Enable location verification",
     ready: "Ready",
     learning: "Waiting for the venue location",

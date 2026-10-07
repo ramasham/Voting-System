@@ -50,6 +50,14 @@ test('a valid verified venue vote commits and releases its connection', async (t
     assert.equal(db.released, true);
 });
 
+test('an approved network can cast a vote without GPS even when location verification is enabled', async (t) => {
+    const db = database(t, { settings: { ...settings, location_enabled: true, location_ready: true } });
+    assert.deepEqual(await castVote(selection), { ...receipt, replayed: false });
+    assert.equal(db.calls.some((entry) => entry.sql.includes('ST_Covers')), false);
+    assert.equal(db.calls.at(-1).sql, 'COMMIT');
+    assert.equal(db.released, true);
+});
+
 test('an identical retry returns the original receipt after voting closes without inserting again', async (t) => {
     const db = database(t, { previous: [receipt], settings: { ...settings, voting_enabled: false } });
     assert.deepEqual(await castVote({ ...selection, clientIp: '192.0.2.10' }), { ...receipt, replayed: true });

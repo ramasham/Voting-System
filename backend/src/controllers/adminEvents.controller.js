@@ -1,4 +1,5 @@
 const pool = require('../../db/connection');
+const ipaddr = require('ipaddr.js');
 const { parsePositiveInteger, normalizeAllowedIpRanges, parseOptionalDate } = require('../utils/validation');
 const { getResults: loadResults } = require('../modules/results/results.service');
 
@@ -8,6 +9,23 @@ const settingsColumns = `event_id, voting_start_at, voting_end_at, voting_enable
 
 function invalidEventId(res) {
   return res.status(400).json({ success: false, message: 'eventId must be a positive integer' });
+}
+
+function getCurrentNetwork(req, res) {
+  try {
+    // Express resolves req.ip using the configured trusted proxy. Return only
+    // this address, never a broader network or a range supplied by the client.
+    const address = ipaddr.process(req.ip);
+    const ip = address.toString();
+    const prefix = address.kind() === 'ipv4' ? 32 : 128;
+    return res.status(200).json({ success: true, data: { ip, cidr: `${ip}/${prefix}` } });
+  } catch {
+    return res.status(503).json({
+      success: false,
+      code: 'NETWORK_UNAVAILABLE',
+      message: 'Unable to identify the current network. Try again.',
+    });
+  }
 }
 
 async function ensureSettings(client, eventId) {
@@ -363,6 +381,7 @@ async function exportResults(req, res) {
 
 
 module.exports = {
+  getCurrentNetwork,
   getSettings,
   updateSettings,
   openVoting,

@@ -95,6 +95,9 @@ export const staffApi = {
       (e) => ({ ...e, id: String(e.id) }),
     )
   },
+  async currentNetwork(token: string): Promise<{ ip: string; cidr: string }> {
+    return backendRequest("/admin/network", { token })
+  },
   async categories(token: string, event: string): Promise<StaffCategory[]> {
     if (staffMode === "mock") {
       requireDemoToken(token)

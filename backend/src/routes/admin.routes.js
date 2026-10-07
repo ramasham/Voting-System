@@ -14,6 +14,7 @@ router.post('/login', adminAuthController.login);
 
 router.use(authenticate('admin'), adminApiRateLimit, auditAdminMutation);
 router.get('/me', adminAuthController.me);
+router.get('/network', adminEventsController.getCurrentNetwork);
 router.post('/mfa/setup', adminAuthController.setupMfa);
 router.post('/mfa/confirm', adminAuthController.confirmMfa);
 

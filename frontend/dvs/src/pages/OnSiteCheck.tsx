@@ -22,8 +22,8 @@ type Phase =
   | "error"
   | "ok";
 
-// Two layers: (1) network check (silent, the server compares the request IP with the venue network),
-// (2) location check (browser GPS, the server compares the coordinates with the venue radius).
+// The server accepts the approved venue network or an accurate location inside
+// the venue. Request GPS only when the network cannot verify the visitor.
 // The decision is always made by the server, never in the browser.
 export function OnSiteCheck({
   lang,
@@ -57,7 +57,7 @@ export function OnSiteCheck({
       .then(() => {
         if (!alive) return;
         setNetworkVerified(true);
-        setPhase(config.requireLocation ? "ask_location" : "ok");
+        setPhase("ok");
       })
       .catch((error) => alive && setPhase(errorCode(error) === "OFF_SITE_NETWORK" ? config.requireLocation ? "ask_location" : "wrong_network" : "error"));
     return () => {

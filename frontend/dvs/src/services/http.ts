@@ -232,7 +232,7 @@ export function createHttpApi(): Api {
       let location: Coordinates | undefined
       const stored = await savedLocation()
       try {
-        if (stored) {
+        if (stored && !networkVerified) {
           if (Date.now() - stored.at < 60000) location = stored.coordinates
           else {
             location = await new Promise<Coordinates>((resolve, reject) =>
