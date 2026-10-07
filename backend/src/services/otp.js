@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 
-const OTP_TTL_SECONDS = 5 * 60;
-const MAX_ATTEMPTS = 5;
+const OTP_TTL_SECONDS = 60;
+const MAX_ATTEMPTS = 3;
 
 function otpSecret() {
   const secret = process.env.OTP_HMAC_SECRET;

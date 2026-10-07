@@ -3,6 +3,7 @@ const { isWithinRateLimit } = require('../services/rateLimiter');
 const { verifyPassword } = require('../services/passwords');
 const { issueToken } = require('../services/tokens');
 const totp = require('../services/totp');
+const { recordAuditEvent } = require('../services/auditLog.service');
 
 const ADMIN_TOKEN_TTL_SECONDS = 30 * 60;
 const DUMMY_PASSWORD_HASH = `scrypt$${'00'.repeat(16)}$${'00'.repeat(64)}`;
@@ -56,6 +57,7 @@ async function login(req, res) {
     const passwordIsValid = await verifyPassword(password, passwordHash);
 
     if (!admin || !passwordIsValid) {
+      await recordAuditEvent('ADMIN_LOGIN_FAILURE');
       return res.status(401).json({
         success: false,
         code: 'INVALID_CREDENTIALS',
@@ -88,6 +90,7 @@ async function login(req, res) {
       role: 'admin',
       expiresInSeconds: ADMIN_TOKEN_TTL_SECONDS,
     });
+    await recordAuditEvent('ADMIN_LOGIN_SUCCESS', { adminId: admin.id });
 
     return res.status(200).json({
       success: true,

@@ -10,6 +10,7 @@ const {
 } = require('../services/otp');
 const { getSmsProvider } = require('../services/smsProvider');
 const { issueToken } = require('../services/tokens');
+const { recordAuditEvent } = require('../services/auditLog.service');
 
 const REGISTRATION_WINDOW_MS = 15 * 60 * 1000;
 const VISITOR_TOKEN_TTL_SECONDS = 12 * 60 * 60;
@@ -24,6 +25,7 @@ function ipRateLimitKey(req) {
 }
 
 function invalidOtpResponse(res) {
+  void recordAuditEvent('OTP_FAILED', { reason: 'INVALID_OR_EXPIRED' });
   return res.status(400).json({
     success: false,
     code: 'INVALID_OR_EXPIRED_OTP',
@@ -156,7 +158,8 @@ async function register(req, res) {
       'UPDATE otp_verifications SET expires_at = CURRENT_TIMESTAMP WHERE id = $1',
       [verificationId]
     ).catch(() => { console.error('Unable to expire failed SMS verification'); });
-    console.error('SMS delivery failed:', error.message);
+    console.error('SMS delivery failed');
+    await recordAuditEvent('OTP_DELIVERY_FAILED');
     return res.status(503).json({
       success: false,
       code: 'SMS_UNAVAILABLE',
@@ -164,6 +167,7 @@ async function register(req, res) {
     });
   }
 
+  await recordAuditEvent('OTP_REQUESTED');
   return res.status(202).json({
     success: true,
     message: 'If the number can receive messages, a verification code has been sent.',
@@ -247,6 +251,7 @@ async function verifyOtp(req, res) {
 
     if (verification.attempts >= MAX_ATTEMPTS) {
       await client.query('COMMIT');
+      void recordAuditEvent('OTP_FAILED', { reason: 'ATTEMPTS_EXCEEDED' });
       return res.status(429).json({
         success: false,
         code: 'OTP_ATTEMPTS_EXCEEDED',
@@ -280,6 +285,7 @@ async function verifyOtp(req, res) {
       [visitorId, verification.pending_name]
     );
     await client.query('COMMIT');
+    await recordAuditEvent('OTP_VERIFIED');
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('OTP verification failed:', error.message);

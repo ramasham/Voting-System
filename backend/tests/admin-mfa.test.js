@@ -64,7 +64,12 @@ test('MFA login atomically consumes a fresh code; concurrent replay cannot get a
   const secret = totp.generateSecret(), sealed = totp.seal(secret), counter = Math.floor(Date.now() / 30000);
   const passwordHash = await hashPassword('MfaTestPassword2026!');
   let consumed = false;
+  const auditEvents = [];
   database(t, (sql, values) => {
+    if (sql.startsWith('INSERT INTO audit_logs')) {
+      auditEvents.push(values);
+      return { rows: [], rowCount: 1 };
+    }
     if (sql.startsWith('SELECT')) return { rows: [{ id: 1, password_hash: passwordHash, mfa_enabled: true, mfa_secret: sealed, mfa_last_counter: -1 }], rowCount: 1 };
     assert.match(sql, /mfa_last_counter < \$2 AND mfa_enabled = TRUE AND mfa_secret = \$3/);
     assert.deepEqual(values, [1, counter, sealed]);
@@ -74,6 +79,7 @@ test('MFA login atomically consumes a fresh code; concurrent replay cannot get a
   const a = response(), b = response(); await Promise.all([auth.login(request, a), auth.login(request, b)]);
   assert.deepEqual([a.statusCode, b.statusCode].sort(), [200, 401]);
   assert.equal([a, b].filter(res => res.body.accessToken).length, 1);
+  assert.deepEqual(auditEvents, [['ADMIN_LOGIN_SUCCESS', 'admin', 1, null, '{}']]);
 });
 test('MFA enrollment requires password reauthentication and stores only an encrypted pending secret', async t => {
   environment(t);

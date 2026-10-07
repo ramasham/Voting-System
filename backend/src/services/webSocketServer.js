@@ -6,6 +6,7 @@ const { parsePositiveInteger } = require('../utils/validation');
 const resultsNotifier = require('./resultsNotifier');
 const pool = require('../../db/connection');
 const proxyaddr = require('proxy-addr');
+const { recordAuditEvent } = require('./auditLog.service');
 
 let webSocketServer;
 
@@ -117,6 +118,14 @@ async function handleMessage(socket, clientIp, message) {
                 coordinates: message.location,
             });
 
+            if (!vote.replayed) {
+                await recordAuditEvent('VOTE_SUCCESS', {
+                    eventId: vote.event_id,
+                    categoryId: vote.category_id,
+                    exhibitorId: vote.exhibitor_id,
+                });
+            }
+
             // The vote service returns only after PostgreSQL COMMIT succeeds.
             send(socket, {
                 type: 'VOTE_ACCEPTED',
@@ -126,6 +135,12 @@ async function handleMessage(socket, clientIp, message) {
                 replayed: vote.replayed,
             });
         } catch (error) {
+            await recordAuditEvent('VOTE_REJECTED', {
+                eventId: message.eventId,
+                categoryId: message.categoryId,
+                exhibitorId: message.exhibitorId,
+                reason: error instanceof VoteError ? error.code : 'VOTE_FAILED',
+            });
             if (error instanceof VoteError) {
                 send(socket, { type: 'VOTE_REJECTED', code: error.code });
             } else {

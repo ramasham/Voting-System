@@ -25,7 +25,7 @@ class TwilioSmsProvider {
   async sendOtp(phoneNumber, otp) {
     const body = new URLSearchParams({
       To: phoneNumber,
-      Body: `Your Maker Collective voting verification code is ${otp}. It expires in 5 minutes.`,
+      Body: `Your Maker Collective voting verification code is ${otp}. It expires in 60 seconds.`,
     });
     if (this.messagingServiceSid) body.set('MessagingServiceSid', this.messagingServiceSid);
     else body.set('From', this.from);
