@@ -122,6 +122,10 @@ async function checkVenueAccess(client, { eventId, settings, clientIp, coordinat
     return reject('OUTSIDE_VENUE', 403, 'Voting is only available inside the venue');
   }
 
+  if (settings.location_enabled && !settings.location_ready && coordinates) {
+    return reject('LOCATION_NOT_READY', 503, 'Connect to the event network while the organizer records the venue location and collects trusted samples');
+  }
+
   if (!hasRanges) {
     return reject('VENUE_ACCESS_NOT_CONFIGURED', 503, 'Venue access is not configured for this event');
   }

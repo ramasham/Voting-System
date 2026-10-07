@@ -31,7 +31,9 @@ Paths below are relative to `/api`.
 
 The catalog adapter combines categories and exhibitors. A multi-category exhibitor appears in each assigned category. There are three categories with no fixed exhibitor count. Real names/descriptions come from PostgreSQL; sample team member names belong only to the demo catalog.
 
-Identical vote retries return the existing vote without increasing counts. Changing an already-cast category vote is rejected with `DUPLICATE_VOTE`; the adapter reloads the visitor's votes. Other errors include `INVALID_OR_EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, `INVALID_TOKEN`, `VOTING_CLOSED`, `OUTSIDE_VENUE`, `LOCATION_REQUIRED`, `LOCATION_INACCURATE`, and `RATE_LIMITED`.
+Identical vote retries return the existing vote without increasing counts. Changing an already-cast category vote is rejected with `DUPLICATE_VOTE`; the adapter reloads the visitor's votes. Other errors include `INVALID_OR_EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, `INVALID_TOKEN`, `VOTING_CLOSED`, `OUTSIDE_VENUE`, `LOCATION_REQUIRED`, `LOCATION_INACCURATE`, `LOCATION_NOT_READY`, and `RATE_LIMITED`. `LOCATION_NOT_READY` means GPS-only access is blocked while the venue zone is being established; approved network access remains available.
+
+When location verification is enabled, the frontend requests location after **Start voting**, including after a successful network check. Coordinates are cached for the selected event. After SMS verification, or after a returning verified visitor allows location, the adapter automatically submits a sample from the approved network. Sample rejection does not block approved network voting. The backend requires an organizer anchor, accuracy of 100 metres or better, and one sample per verified visitor per event.
 
 ## Staff endpoints
 

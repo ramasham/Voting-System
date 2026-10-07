@@ -95,7 +95,7 @@ export const staffCopy = {
     anchorSaved:
       "تم تسجيل موقع المعرض. يحتاج اعتماد الموقع إلى ثلاث عينات موثوقة على الأقل.",
     anchorHint:
-      "سجّل موقعك وأنت داخل المعرض. يحتاج الموقع إلى ثلاث عينات موثوقة على الأقل قبل اعتماده.",
+      "سجّل موقع المعرض بدقّة 100 متر أو أفضل. ثم اطلب من زائرَين مختلفَين على شبكة المعرض مسح الرمز، والضغط على ابدأ التصويت، والسماح بالموقع، والتحقق من رقم الهاتف. تشمل العينات الثلاث موقع المنظّم.",
     shareVoting: "رابط التصويت ورمز QR",
     shareVotingBody:
       "شارك الرابط أو اطبع رمز QR ليتمكّن الزوّار من فتح صفحة التصويت على هواتفهم.",
@@ -108,6 +108,8 @@ export const staffCopy = {
     scanToVote: "امسح الرمز لفتح التصويت",
     shareLocalHint:
       "هذا الرابط يعمل على هذا الكمبيوتر فقط. افتح لوحة الإدارة من رابط الموقع المنشور للحصول على رمز QR يعمل على الهواتف.",
+    shareHttpsHint:
+      "هذا الرمز يفتح رابط HTTP، ولن يطلب الموقع على الهواتف. افتح لوحة الإدارة عبر رابط HTTPS المنشور ثم نزّل الرمز من هناك.",
     export: "تصدير النتائج",
     exportBody: "تنزيل عدد الأصوات لكل مشروع وفئة بصيغة CSV.",
     reset: "تصفير النتائج",
@@ -292,7 +294,7 @@ export const staffCopy = {
     anchorSaved:
       "Venue location recorded. At least three trusted samples are needed before location access is ready.",
     anchorHint:
-      "Record your position while at the venue. The location needs at least three trusted samples before it is ready.",
+      "Record the venue with accuracy of 100 metres or better. Then have two different visitors on the exhibition Wi-Fi scan the QR, tap Start voting, allow location, and verify their phone numbers. The three samples include the organizer's position.",
     shareVoting: "Voting link and QR code",
     shareVotingBody:
       "Share the link or print the QR code so visitors can open the voting page on their phones.",
@@ -306,6 +308,8 @@ export const staffCopy = {
     scanToVote: "Scan to open voting",
     shareLocalHint:
       "This link only works on this computer. Open the admin panel at the published website address to get a QR code that works on phones.",
+    shareHttpsHint:
+      "This QR opens an HTTP link, which cannot request location on phones. Open the admin panel using the published HTTPS address and download the QR there.",
     export: "Export results",
     exportBody:
       "Download vote counts for every project and category as a CSV file.",

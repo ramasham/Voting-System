@@ -8,9 +8,11 @@ import { downloadBlob } from "./utils"
 export default function VotingShare({
   event,
   lang,
+  locationEnabled = false,
 }: {
   event: string
   lang: Language
+  locationEnabled?: boolean
 }) {
   const t = staffCopy[lang]
   const qr = useRef<SVGSVGElement>(null)
@@ -57,6 +59,9 @@ export default function VotingShare({
           />
         </label>
         {local && <p className="staff-hint">{t.shareLocalHint}</p>}
+        {locationEnabled && url.protocol !== "https:" && (
+          <p className="staff-error" role="alert">{t.shareHttpsHint}</p>
+        )}
         <div className="staff-share__actions">
           <button
             className="staff-button staff-button--outline"

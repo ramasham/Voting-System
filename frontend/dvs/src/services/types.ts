@@ -10,6 +10,7 @@ export type ApiErrorCode =
   | "OFF_SITE_NETWORK" // request did not come from the exhibition network
   | "OFF_SITE_LOCATION" // location is outside the venue radius
   | "LOCATION_INACCURATE" // GPS accuracy too weak to decide
+  | "LOCATION_NOT_READY" // organizer anchor and trusted samples are still needed
   | "VOTING_CLOSED"
   | "VOTING_NOT_STARTED"
   | "ALREADY_VOTED" // this visitor already voted in this category

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { type Language } from "../data/config";
 import { copy } from "../i18n/copy";
 import { StateScreen } from "../components/StateScreen";
@@ -14,6 +14,9 @@ type Phase =
   | "denied"
   | "unavailable"
   | "timeout"
+  | "insecure"
+  | "inaccurate"
+  | "not_ready"
   | "off_site"
   | "error"
   | "ok";
@@ -37,7 +40,7 @@ export function OnSiteCheck({
   const t = copy[lang];
   const [phase, setPhase] = useState<Phase>(config.requireNetworkCheck ? "network" : config.requireLocation ? "ask_location" : "ok");
   const [attempt, setAttempt] = useState(0);
-  const done = useRef(false);
+  const [networkVerified, setNetworkVerified] = useState(false);
 
   const finish = () => {
     setPhase("ok");
@@ -48,7 +51,11 @@ export function OnSiteCheck({
     let alive = true;
     api
       .checkNetwork()
-      .then(() => alive && (config.requireLocation && api.mode === "mock" ? setPhase("ask_location") : finish()))
+      .then(() => {
+        if (!alive) return;
+        setNetworkVerified(true);
+        setPhase(config.requireLocation ? "ask_location" : "ok");
+      })
       .catch((error) => alive && setPhase(errorCode(error) === "OFF_SITE_NETWORK" ? config.requireLocation ? "ask_location" : "wrong_network" : "error"));
     return () => {
       alive = false;
@@ -56,8 +63,7 @@ export function OnSiteCheck({
   }, [phase, attempt, config.requireLocation]);
 
   useEffect(() => {
-    if (phase !== "ok" || done.current) return;
-    done.current = true;
+    if (phase !== "ok") return;
     const timer = window.setTimeout(onVerified, 1100);
     return () => window.clearTimeout(timer);
   }, [phase, onVerified]);
@@ -68,7 +74,7 @@ export function OnSiteCheck({
       .then(finish)
       .catch((error) => {
         const code = errorCode(error);
-        setPhase(code === "OFF_SITE_LOCATION" ? "off_site" : code === "LOCATION_INACCURATE" ? "unavailable" : "error");
+        setPhase(code === "OFF_SITE_LOCATION" ? "off_site" : code === "LOCATION_INACCURATE" ? "inaccurate" : code === "LOCATION_NOT_READY" ? "not_ready" : "error");
       });
 
   const askLocation = () => {
@@ -77,6 +83,10 @@ export function OnSiteCheck({
     const simulated: Record<string, Phase> = { location_denied: "denied", location_unavailable: "unavailable", location_timeout: "timeout", offsite_location: "off_site" };
     if (api.mode === "mock" && simulated[demo]) {
       window.setTimeout(() => setPhase(simulated[demo]), 800);
+      return;
+    }
+    if (api.mode === "http" && !window.isSecureContext) {
+      setPhase("insecure");
       return;
     }
     if (api.mode === "mock" && !navigator.geolocation) {
@@ -88,18 +98,28 @@ export function OnSiteCheck({
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (position) =>
-        void sendLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy }),
+      (position) => {
+        if (position.coords.accuracy > 100) {
+          setPhase("inaccurate");
+          return;
+        }
+        void sendLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy });
+      },
       (error) => setPhase(error.code === 1 ? "denied" : error.code === 3 ? "timeout" : "unavailable"),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
     );
   };
 
   const retryNetwork = () => {
+    setNetworkVerified(false);
     setPhase("network");
     setAttempt((value) => value + 1);
   };
-  const common = { lang, setLang, onBack };
+  const common = {
+    lang, setLang, onBack,
+    secondary: networkVerified && phase !== "locating" && phase !== "network"
+      ? { label: t.continueOnNetwork, onClick: finish } : undefined,
+  };
 
   if (phase === "network") return <StateScreen {...common} spinner title={t.checkNetTitle} body={t.checkNetBody} />;
   if (phase === "wrong_network")
@@ -113,8 +133,14 @@ export function OnSiteCheck({
     return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.unavailBody} icon="pin" title={t.unavailTitle} tone="yellow" />;
   if (phase === "timeout")
     return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.timeoutBody} icon="pin" title={t.timeoutTitle} tone="yellow" />;
+  if (phase === "insecure")
+    return <StateScreen {...common} body={t.locationInsecureBody} icon="lock" title={t.locationInsecureTitle} tone="yellow" />;
+  if (phase === "inaccurate")
+    return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.locationInaccurateBody} icon="pin" title={t.locationInaccurateTitle} tone="yellow" />;
+  if (phase === "not_ready")
+    return <StateScreen {...common} action={{ label: t.retry, onClick: config.requireNetworkCheck ? retryNetwork : askLocation }} body={t.locationNotReadyBody} icon="pin" title={t.locationNotReadyTitle} tone="yellow" />;
   if (phase === "off_site") return <StateScreen {...common} body={t.offSiteBody} icon="pin" title={t.offSiteTitle} tone="error" action={{ label: t.retry, onClick: askLocation }} />;
   if (phase === "error")
     return <StateScreen {...common} action={{ label: t.retry, onClick: config.requireNetworkCheck ? retryNetwork : askLocation }} body={t.serverBody} icon="alert" title={t.serverTitle} tone="error" />;
-  return <StateScreen {...common} body={t.siteOkBody} icon="check" title={t.siteOkTitle} tone="success" />;
+  return <StateScreen lang={lang} setLang={setLang} onBack={onBack} body={t.siteOkBody} icon="check" title={t.siteOkTitle} tone="success" />;
 }

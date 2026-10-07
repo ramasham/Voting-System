@@ -82,6 +82,10 @@ Enable location verification in Voting settings, then select **Record venue loca
 
 The interface distinguishes blocked permission, unavailable positioning, a 30-second timeout, and accuracy worse than the required 100 meters. Success records the organizer anchor immediately. The status remains **Waiting for location samples** until at least three trusted samples form a cluster around that anchor. Each event accepts one organizer anchor; use a separate test event for simulated coordinates.
 
+Scanning the visitor QR only opens the page. During the open voting window, visitors tap **Start voting**, then **Allow location**. When location verification is enabled, this step also appears on the approved venue network and for returning visitor sessions. GPS accuracy must be 100 metres or better. After SMS verification, the frontend automatically submits the location to the trusted-sample endpoint. The server requires the approved network, a verified phone, and an existing organizer anchor; it accepts one sample per visitor per event. The organizer anchor plus two nearby visitors can supply the three required samples. Reload the admin settings to see updated readiness.
+
+Visitors whose network check passes can continue using venue Wi-Fi if location is blocked or unavailable. This does not contribute a sample. GPS-only visitors remain blocked until the organizer has established a ready zone. HTTP QR links display an HTTPS warning; use the deployed HTTPS link on phones.
+
 ## Validation and code
 
 Run `pnpm exec tsc --noEmit` and `pnpm build` here, and `npm test` in `../../backend`. See [the API contract](docs/API_CONTRACT.md) for requests and security behavior.

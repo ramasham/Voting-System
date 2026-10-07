@@ -42,6 +42,7 @@ function convertError(
     LOCATION_REQUIRED: "OFF_SITE_NETWORK",
     OUTSIDE_VENUE: outside,
     LOCATION_INACCURATE: "LOCATION_INACCURATE",
+    LOCATION_NOT_READY: "LOCATION_NOT_READY",
   }
   const code =
     mapped[error.code] ?? (error.status >= 500 ? "SERVER" : "VALIDATION")
@@ -106,22 +107,90 @@ export function createHttpApi(): Api {
     return { visitor: { ...visitor, id: String(visitor.id) }, votes }
   }
   const LOCATION_KEY = "mc2026.visitor.location"
+  type Coordinates = { latitude: number; longitude: number; accuracy: number }
+  type SavedLocation = { event: string; coordinates: Coordinates; at: number }
+  const savedLocation = async (): Promise<SavedLocation | null> => {
+    try {
+      const stored = JSON.parse(
+        sessionStorage.getItem(LOCATION_KEY) ?? "null",
+      ) as SavedLocation | null
+      if (
+        stored?.event === (await eventId()) &&
+        Number.isFinite(stored.at) &&
+        stored.at <= Date.now() &&
+        Number.isFinite(stored.coordinates?.latitude) &&
+        Math.abs(stored.coordinates.latitude) <= 90 &&
+        Number.isFinite(stored.coordinates.longitude) &&
+        Math.abs(stored.coordinates.longitude) <= 180 &&
+        Number.isFinite(stored.coordinates.accuracy) &&
+        stored.coordinates.accuracy >= 0 &&
+        stored.coordinates.accuracy <= 100
+      )
+        return stored
+    } catch {
+      /* Ignore coordinates from an old or damaged session. */
+    }
+    return null
+  }
+  const rememberLocation = async (coordinates: Coordinates) => {
+    const stored = { event: await eventId(), coordinates, at: Date.now() }
+    sessionStorage.setItem(LOCATION_KEY, JSON.stringify(stored))
+    return stored
+  }
+  let networkVerified = false
+  const submittedSamples = new Set<string>()
+  const sampleRequests = new Map<string, Promise<void>>()
+  const captureSample = (token: string, stored: SavedLocation): Promise<void> => {
+    if (
+      !networkVerified ||
+      Date.now() - stored.at >= 300000 ||
+      submittedSamples.has(token)
+    )
+      return Promise.resolve()
+    const pending = sampleRequests.get(token)
+    if (pending) return pending
+    // The server accepts only verified visitors on the approved network, with an organizer anchor.
+    // Sampling is optional for network voting; transient failures can retry on the next vote.
+    const request = backendRequest(`/events/${stored.event}/location/samples`, {
+      token,
+      method: "POST",
+      body: stored.coordinates,
+    })
+      .then(() => { submittedSamples.add(token) })
+      .catch((error: unknown) => {
+        if (
+          error instanceof BackendError &&
+          error.code === "LOCATION_SAMPLE_ALREADY_SUBMITTED"
+        )
+          submittedSamples.add(token)
+      })
+      .finally(() => { sampleRequests.delete(token) })
+    sampleRequests.set(token, request)
+    return request
+  }
   return {
     mode: "http",
     getConfig: async () => call<AppConfig>(`/events/${await eventId()}/config`),
     checkNetwork: async () => {
+      networkVerified = false
       await call(`/events/${await eventId()}/venue-test`)
+      networkVerified = true
     },
     checkLocation: async (input) => {
+      if (
+        !Number.isFinite(input.accuracy) ||
+        input.accuracy < 0 ||
+        input.accuracy > 100
+      )
+        throw new ApiError("LOCATION_INACCURATE")
       await call(
         `/events/${await eventId()}/venue-test`,
         { method: "POST", body: { location: input } },
         "OFF_SITE_LOCATION",
       )
-      sessionStorage.setItem(
-        LOCATION_KEY,
-        JSON.stringify({ coordinates: input, at: Date.now() }),
-      )
+      const stored = await rememberLocation(input)
+      const auth = readAuth()
+      if (auth) void captureSample(auth.accessToken, stored)
     },
     sendOtp: async (input) => {
       await call("/auth/register", {
@@ -145,7 +214,10 @@ export function createHttpApi(): Api {
           expiresAt: Date.now() + result.expiresInSeconds * 1000,
         }),
       )
-      return restore(result.accessToken)
+      const session = await restore(result.accessToken)
+      const stored = await savedLocation()
+      if (stored) void captureSample(result.accessToken, stored)
+      return session
     },
     getMe: async () => {
       const auth = readAuth()
@@ -191,19 +263,13 @@ export function createHttpApi(): Api {
     castVote: async (input) => {
       const auth = readAuth()
       if (!auth) throw new ApiError("SESSION_EXPIRED")
-      let location: {
-        latitude: number
-        longitude: number
-        accuracy: number
-      } | undefined
+      let location: Coordinates | undefined
+      let stored = await savedLocation()
       try {
-        const stored = JSON.parse(
-          sessionStorage.getItem(LOCATION_KEY) ?? "null",
-        )
         if (stored) {
           if (Date.now() - stored.at < 60000) location = stored.coordinates
-          else
-            location = await new Promise((resolve, reject) =>
+          else {
+            location = await new Promise<Coordinates>((resolve, reject) =>
               navigator.geolocation.getCurrentPosition(
                 (p) =>
                   resolve({
@@ -212,12 +278,20 @@ export function createHttpApi(): Api {
                     accuracy: p.coords.accuracy,
                   }),
                 () => reject(new ApiError("OFF_SITE_LOCATION")),
-                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
               ),
             )
+            if (location.accuracy > 100) throw new ApiError("LOCATION_INACCURATE")
+            stored = await rememberLocation(location)
+          }
+          void captureSample(auth.accessToken, stored)
         }
       } catch (error) {
-        if (error instanceof ApiError) throw error
+        if (!networkVerified) {
+          if (error instanceof ApiError) throw error
+          throw new ApiError("OFF_SITE_LOCATION")
+        }
+        location = undefined
       }
       try {
         await call(

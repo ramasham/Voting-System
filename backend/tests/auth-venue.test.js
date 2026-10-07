@@ -93,6 +93,18 @@ test('GPS access requires a ready zone, valid coordinates and sufficient accurac
   assert.equal((await venue(settings, location, null, { query: async () => ({ rows: [{ inside: false }] }) })).code, 'OUTSIDE_VENUE');
 });
 
+test('GPS during setup explains that trusted network samples are needed and cannot authorize access', async () => {
+  const location = { latitude: 31.95, longitude: 35.91, accuracy: 15 };
+  for (const allowed_ip_ranges of [null, '192.0.2.0/24']) {
+    const settings = { allowed_ip_ranges, location_enabled: true, location_ready: false };
+    const result = await venue(settings, location);
+    assert.equal(result.allowed, false);
+    assert.equal(result.code, 'LOCATION_NOT_READY');
+    assert.equal(result.status, 503);
+  }
+  assert.equal((await venue({ allowed_ip_ranges: '192.0.2.0/24', location_enabled: true, location_ready: false }, location, '192.0.2.4')).method, 'network');
+});
+
 test('tokens enforce role separation, integrity and expiry', () => {
   const token = issueToken({ subject: 7, role: 'visitor', expiresInSeconds: 60 });
   assert.equal(verifyToken(token, 'visitor').id, 7);

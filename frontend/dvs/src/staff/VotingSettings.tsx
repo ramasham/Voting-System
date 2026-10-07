@@ -240,7 +240,7 @@ export default function VotingSettings({
           </button>
         </div>
       </form>
-      <VotingShare event={event} lang={lang} />
+      <VotingShare event={event} lang={lang} locationEnabled={location} />
       <section className="staff-panel staff-result-tools">
         <div>
           <h2>{t.resultsTools}</h2>
