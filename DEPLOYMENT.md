@@ -58,6 +58,8 @@ Apply the Blueprint. Render generates four independent application secrets and t
 
 After the service becomes Live, copy its actual `https://...onrender.com` address. That is the visitor address. The admin panel is `/admin`, results are `/results`, and `/ready` checks database connectivity. In Render's **Environment** tab, reveal `ADMIN_PASSWORD` privately to sign in as `makerspace`.
 
+`ADMIN_USERNAME` and `ADMIN_PASSWORD` are used only to create the first admin on an empty database. Changing them later does not reset an existing account's password, and redeployment does not validate these unused initial credentials. First-time setup still requires a password of 12–128 characters.
+
 This Blueprint sets `TRUST_PROXY=1` for Render's managed proxy and does not expose the Node port directly to clients. Recheck this setting if adding another reverse proxy or CDN.
 
 ## 4. Configure phone voting and location

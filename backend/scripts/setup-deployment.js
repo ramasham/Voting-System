@@ -25,6 +25,9 @@ function validateEnvironment(env) {
   if (new Set(secrets).size !== secrets.length) {
     throw new DeploymentConfigurationError('Use a different value for each application secret');
   }
+}
+
+function validateInitialAdminCredentials(env) {
   if (!/^[a-z0-9._-]{3,255}$/.test(env.ADMIN_USERNAME || '') ||
       typeof env.ADMIN_PASSWORD !== 'string' || env.ADMIN_PASSWORD.length < 12 || env.ADMIN_PASSWORD.length > 128) {
     throw new DeploymentConfigurationError('Set ADMIN_USERNAME and a private ADMIN_PASSWORD of 12–128 characters for the initial hosted account');
@@ -32,10 +35,12 @@ function validateEnvironment(env) {
 }
 
 async function initializeDatabase(pool, env, seedDatabase) {
+  const admins = await pool.query('SELECT EXISTS (SELECT 1 FROM admins) AS present');
+  if (!admins.rows[0].present) validateInitialAdminCredentials(env);
+
   const events = await pool.query('SELECT EXISTS (SELECT 1 FROM events) AS present');
   if (!events.rows[0].present) await seedDatabase();
 
-  const admins = await pool.query('SELECT EXISTS (SELECT 1 FROM admins) AS present');
   if (!admins.rows[0].present) {
     const passwordHash = await hashPassword(env.ADMIN_PASSWORD);
     await pool.query(
