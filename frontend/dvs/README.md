@@ -72,6 +72,8 @@ Real visitor names and verified phones remain in PostgreSQL, linked to votes. Th
 
 The existing PostGIS flow requires an organizer anchor and at least three trusted samples before GPS-only access is ready. Verified visitors on the approved network submit samples through the location API. Approved network access or an enabled, ready location zone authorizes voting. Browser coordinates are not device-attested.
 
+After a visitor denies location, **Try again** requests a fresh position. A repeated denial shows **Location is still blocked** and explains how to allow the site in browser settings; a website cannot force a new permission prompt while the browser remembers a block. GPS-only visitors see that location access is required to vote. When the browser supports geolocation permission updates, granting access or returning to the page with access allowed automatically retries location verification.
+
 ## Validation and code
 
 Run `pnpm exec tsc --noEmit` and `pnpm build` here, and `npm test` in `../../backend`. See [the API contract](docs/API_CONTRACT.md) for requests and security behavior.

@@ -42,6 +42,7 @@ function convertError(
     LOCATION_REQUIRED: "OFF_SITE_NETWORK",
     OUTSIDE_VENUE: outside,
     LOCATION_INACCURATE: "LOCATION_INACCURATE",
+    LOCATION_NOT_READY: "LOCATION_NOT_READY",
   }
   const code =
     mapped[error.code] ?? (error.status >= 500 ? "SERVER" : "VALIDATION")
@@ -60,7 +61,11 @@ export function createHttpApi(): Api {
   const eventId = () => {
     if (!eventPromise)
       eventPromise = (async () => {
-        const specified = import.meta.env.VITE_EVENT_ID as string | undefined
+        const specified =
+          new URLSearchParams(window.location.search).get("event") ||
+          import.meta.env.VITE_EVENT_ID as string | undefined
+        if (specified && !/^[1-9]\d*$/.test(specified))
+          throw new ApiError("VALIDATION")
         if (specified) return specified
         const events = await backendRequest<StaffEvent[]>("/events")
         if (!events.length) throw new ApiError("SERVER")
@@ -86,10 +91,7 @@ export function createHttpApi(): Api {
     const rows = await call<{
       category_id: number
       exhibitor_id: number
-    }[]>(
-      `/events/${await eventId()}/votes`,
-      { token },
-    )
+    }[]>(`/events/${await eventId()}/votes`, { token })
     return Object.fromEntries(
       rows.map((row) => [String(row.category_id), String(row.exhibitor_id)]),
     )
@@ -105,22 +107,58 @@ export function createHttpApi(): Api {
     return { visitor: { ...visitor, id: String(visitor.id) }, votes }
   }
   const LOCATION_KEY = "mc2026.visitor.location"
+  type Coordinates = { latitude: number; longitude: number; accuracy: number }
+  type SavedLocation = { event: string; coordinates: Coordinates; at: number }
+  const savedLocation = async (): Promise<SavedLocation | null> => {
+    try {
+      const stored = JSON.parse(
+        sessionStorage.getItem(LOCATION_KEY) ?? "null",
+      ) as SavedLocation | null
+      if (
+        stored?.event === (await eventId()) &&
+        Number.isFinite(stored.at) &&
+        stored.at <= Date.now() &&
+        Number.isFinite(stored.coordinates?.latitude) &&
+        Math.abs(stored.coordinates.latitude) <= 90 &&
+        Number.isFinite(stored.coordinates.longitude) &&
+        Math.abs(stored.coordinates.longitude) <= 180 &&
+        Number.isFinite(stored.coordinates.accuracy) &&
+        stored.coordinates.accuracy >= 0 &&
+        stored.coordinates.accuracy <= 100
+      )
+        return stored
+    } catch {
+      /* Ignore coordinates from an old or damaged session. */
+    }
+    return null
+  }
+  const rememberLocation = async (coordinates: Coordinates) => {
+    const stored = { event: await eventId(), coordinates, at: Date.now() }
+    sessionStorage.setItem(LOCATION_KEY, JSON.stringify(stored))
+    return stored
+  }
+  let networkVerified = false
   return {
     mode: "http",
     getConfig: async () => call<AppConfig>(`/events/${await eventId()}/config`),
     checkNetwork: async () => {
+      networkVerified = false
       await call(`/events/${await eventId()}/venue-test`)
+      networkVerified = true
     },
     checkLocation: async (input) => {
+      if (
+        !Number.isFinite(input.accuracy) ||
+        input.accuracy < 0 ||
+        input.accuracy > 100
+      )
+        throw new ApiError("LOCATION_INACCURATE")
       await call(
         `/events/${await eventId()}/venue-test`,
         { method: "POST", body: { location: input } },
         "OFF_SITE_LOCATION",
       )
-      sessionStorage.setItem(
-        LOCATION_KEY,
-        JSON.stringify({ coordinates: input, at: Date.now() }),
-      )
+      await rememberLocation(input)
     },
     sendOtp: async (input) => {
       await call("/auth/register", {
@@ -190,19 +228,13 @@ export function createHttpApi(): Api {
     castVote: async (input) => {
       const auth = readAuth()
       if (!auth) throw new ApiError("SESSION_EXPIRED")
-      let location: {
-        latitude: number
-        longitude: number
-        accuracy: number
-      } | undefined
+      let location: Coordinates | undefined
+      const stored = await savedLocation()
       try {
-        const stored = JSON.parse(
-          sessionStorage.getItem(LOCATION_KEY) ?? "null",
-        )
         if (stored) {
           if (Date.now() - stored.at < 60000) location = stored.coordinates
-          else
-            location = await new Promise((resolve, reject) =>
+          else {
+            location = await new Promise<Coordinates>((resolve, reject) =>
               navigator.geolocation.getCurrentPosition(
                 (p) =>
                   resolve({
@@ -211,12 +243,19 @@ export function createHttpApi(): Api {
                     accuracy: p.coords.accuracy,
                   }),
                 () => reject(new ApiError("OFF_SITE_LOCATION")),
-                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
               ),
             )
+            if (location.accuracy > 100) throw new ApiError("LOCATION_INACCURATE")
+            await rememberLocation(location)
+          }
         }
       } catch (error) {
-        if (error instanceof ApiError) throw error
+        if (!networkVerified) {
+          if (error instanceof ApiError) throw error
+          throw new ApiError("OFF_SITE_LOCATION")
+        }
+        location = undefined
       }
       try {
         await call(
