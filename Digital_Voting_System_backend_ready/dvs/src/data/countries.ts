@@ -1,0 +1,15 @@
+export const countries = [
+  { code: "JO", ar: "الأردن", en: "Jordan", dial: "+962", length: 9 },
+  { code: "SA", ar: "السعودية", en: "Saudi Arabia", dial: "+966", length: 9 },
+  { code: "AE", ar: "الإمارات", en: "United Arab Emirates", dial: "+971", length: 9 },
+  { code: "QA", ar: "قطر", en: "Qatar", dial: "+974", length: 8 },
+  { code: "KW", ar: "الكويت", en: "Kuwait", dial: "+965", length: 8 },
+  { code: "BH", ar: "البحرين", en: "Bahrain", dial: "+973", length: 8 },
+  { code: "OM", ar: "عُمان", en: "Oman", dial: "+968", length: 8 },
+  { code: "PS", ar: "فلسطين", en: "Palestine", dial: "+970", length: 9 },
+  { code: "LB", ar: "لبنان", en: "Lebanon", dial: "+961", length: 8 },
+  { code: "EG", ar: "مصر", en: "Egypt", dial: "+20", length: 10 },
+  { code: "IQ", ar: "العراق", en: "Iraq", dial: "+964", length: 10 },
+  { code: "GB", ar: "المملكة المتحدة", en: "United Kingdom", dial: "+44", length: 10 },
+  { code: "US", ar: "الولايات المتحدة", en: "United States", dial: "+1", length: 10 },
+];
