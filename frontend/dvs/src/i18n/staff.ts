@@ -91,8 +91,23 @@ export const staffCopy = {
     ready: "جاهز",
     learning: "بانتظار عينات الموقع",
     captureAnchor: "تسجيل موقع المعرض",
+    locating: "جارٍ تحديد الموقع…",
+    anchorSaved:
+      "تم تسجيل موقع المعرض. يحتاج اعتماد الموقع إلى ثلاث عينات موثوقة على الأقل.",
     anchorHint:
       "سجّل موقعك وأنت داخل المعرض. يحتاج الموقع إلى ثلاث عينات موثوقة على الأقل قبل اعتماده.",
+    shareVoting: "رابط التصويت ورمز QR",
+    shareVotingBody:
+      "شارك الرابط أو اطبع رمز QR ليتمكّن الزوّار من فتح صفحة التصويت على هواتفهم.",
+    votingLink: "رابط صفحة التصويت",
+    copyLink: "نسخ الرابط",
+    linkCopied: "تم نسخ رابط التصويت.",
+    copyLinkError: "تعذّر نسخ الرابط. حدّده من الحقل وانسخه يدويًا.",
+    downloadQr: "تنزيل رمز QR",
+    votingQr: "رمز QR لصفحة التصويت",
+    scanToVote: "امسح الرمز لفتح التصويت",
+    shareLocalHint:
+      "هذا الرابط يعمل على هذا الكمبيوتر فقط. افتح لوحة الإدارة من رابط الموقع المنشور للحصول على رمز QR يعمل على الهواتف.",
     export: "تصدير النتائج",
     exportBody: "تنزيل عدد الأصوات لكل مشروع وفئة بصيغة CSV.",
     reset: "تصفير النتائج",
@@ -161,6 +176,19 @@ export const staffCopy = {
       "يجب تجهيز ثلاث فئات وإضافة مشروع واحد على الأقل لكل فئة.",
     locationError:
       "تعذّر الحصول على موقعك. اسمح بالوصول إلى الموقع وأعد المحاولة.",
+    locationInsecure:
+      "يتطلّب تحديد الموقع اتصال HTTPS. للاختبار على هذا الجهاز، افتح الموقع باستخدام http://localhost:8443.",
+    locationUnsupported:
+      "هذا المتصفح لا يدعم تحديد الموقع. جرّب متصفحًا يدعم خدمات الموقع.",
+    locationDenied:
+      "الوصول إلى الموقع محظور. اسمح لهذا الموقع بالوصول إلى موقعك من إعدادات المتصفح، ثم أعد المحاولة.",
+    locationUnavailable:
+      "لم يتمكّن المتصفح من تحديد موقع هذا الجهاز. تحقّق من الاتصال بالإنترنت وخدمات الموقع، أو جرّب هاتفًا عبر HTTPS.",
+    locationTimeout:
+      "لم يصل موقعك خلال 30 ثانية. تحقّق من خدمات الموقع وأعد المحاولة.",
+    locationInaccurate:
+      "دقّة الموقع غير كافية. نحتاج إلى دقّة 100 متر أو أفضل. جرّب جهازًا يدعم GPS، مثل الهاتف.",
+    anchorAlreadySet: "تم تسجيل موقع المعرض مسبقًا. لا يمكن تسجيله مرة أخرى.",
     setupExpired: "انتهت صلاحية الإعداد. ابدأ إعداد المصادقة مجددًا.",
   },
   en: {
@@ -260,8 +288,24 @@ export const staffCopy = {
     ready: "Ready",
     learning: "Waiting for location samples",
     captureAnchor: "Record venue location",
+    locating: "Finding your location…",
+    anchorSaved:
+      "Venue location recorded. At least three trusted samples are needed before location access is ready.",
     anchorHint:
       "Record your position while at the venue. The location needs at least three trusted samples before it is ready.",
+    shareVoting: "Voting link and QR code",
+    shareVotingBody:
+      "Share the link or print the QR code so visitors can open the voting page on their phones.",
+    votingLink: "Voting page link",
+    copyLink: "Copy link",
+    linkCopied: "Voting link copied.",
+    copyLinkError:
+      "Unable to copy the link. Select it in the field and copy it manually.",
+    downloadQr: "Download QR code",
+    votingQr: "Voting page QR code",
+    scanToVote: "Scan to open voting",
+    shareLocalHint:
+      "This link only works on this computer. Open the admin panel at the published website address to get a QR code that works on phones.",
     export: "Export results",
     exportBody:
       "Download vote counts for every project and category as a CSV file.",
@@ -337,6 +381,20 @@ export const staffCopy = {
       "Set up three categories with at least one project in each.",
     locationError:
       "Unable to get your position. Allow location access and try again.",
+    locationInsecure:
+      "Location requires HTTPS. To test on this computer, open http://localhost:8443.",
+    locationUnsupported:
+      "This browser does not support location. Try a browser with location services.",
+    locationDenied:
+      "Location access is blocked. Allow this site to access your location in browser settings, then try again.",
+    locationUnavailable:
+      "Your browser could not locate this device. Check your internet connection and location services, or try a phone over HTTPS.",
+    locationTimeout:
+      "Your location did not arrive within 30 seconds. Check location services and try again.",
+    locationInaccurate:
+      "Location accuracy must be 100 meters or better. Try a GPS-capable device, such as a phone.",
+    anchorAlreadySet:
+      "The venue location has already been recorded for this event.",
     setupExpired: "Setup has expired. Start authenticator setup again.",
   },
 }

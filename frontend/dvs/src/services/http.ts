@@ -60,7 +60,11 @@ export function createHttpApi(): Api {
   const eventId = () => {
     if (!eventPromise)
       eventPromise = (async () => {
-        const specified = import.meta.env.VITE_EVENT_ID as string | undefined
+        const specified =
+          new URLSearchParams(window.location.search).get("event") ||
+          import.meta.env.VITE_EVENT_ID as string | undefined
+        if (specified && !/^[1-9]\d*$/.test(specified))
+          throw new ApiError("VALIDATION")
         if (specified) return specified
         const events = await backendRequest<StaffEvent[]>("/events")
         if (!events.length) throw new ApiError("SERVER")
@@ -86,10 +90,7 @@ export function createHttpApi(): Api {
     const rows = await call<{
       category_id: number
       exhibitor_id: number
-    }[]>(
-      `/events/${await eventId()}/votes`,
-      { token },
-    )
+    }[]>(`/events/${await eventId()}/votes`, { token })
     return Object.fromEntries(
       rows.map((row) => [String(row.category_id), String(row.exhibitor_id)]),
     )

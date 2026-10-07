@@ -237,7 +237,12 @@ test('an incorrect OTP increments attempts without verifying the phone', async (
 });
 
 test('SMS failure expires the pending code and returns no token or OTP', async (t) => {
-  setEnv(t, 'SMS_PROVIDER', 'unsupported-test-provider');
+  setEnv(t, 'SMS_PROVIDER', 'smsgate');
+  setEnv(t, 'SMSGATE_BASE_URL', 'http://192.168.1.50:8080');
+  setEnv(t, 'SMSGATE_USERNAME', 'test-user');
+  setEnv(t, 'SMSGATE_PASSWORD', 'test-password');
+  setEnv(t, 'SMSGATE_SIM_NUMBER', '');
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 503 }));
   t.mock.method(console, 'error', () => {});
   let expired = false;
   t.mock.method(pool, 'query', async (sql) => {

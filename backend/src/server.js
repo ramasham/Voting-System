@@ -10,10 +10,6 @@ const server = http.createServer(app);
 const sockets = attachWebSocketServer(server, app);
 const pool = require('../db/connection');
 
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
 let stopping = false;
 async function shutdown() {
     if (stopping) return;
@@ -31,5 +27,23 @@ async function shutdown() {
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+function handleServerError(error) {
+    if (stopping) return;
+    process.exitCode = 1;
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Cannot start backend: port ${PORT} is already in use. Stop the existing backend with Ctrl+C. If it was paused with Ctrl+Z, run fg in its terminal, then Ctrl+C.`);
+    } else {
+        console.error('Backend server failed:', error.code || 'SERVER_ERROR');
+    }
+    void shutdown();
+}
+
+// ws forwards HTTP server errors, so both emitters need a handler.
+server.on('error', handleServerError);
+sockets.on('error', handleServerError);
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
 
 module.exports = server;

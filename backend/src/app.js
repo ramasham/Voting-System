@@ -93,6 +93,16 @@ if (process.env.NODE_ENV !== 'production') {
     });
 }
 
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'API route not found' });
+});
+
+if (process.env.NODE_ENV === 'production' || process.env.SERVE_FRONTEND === 'true') {
+    const path = require('node:path');
+    const { serveFrontend } = require('./services/serveFrontend');
+    serveFrontend(app, path.resolve(__dirname, '../../frontend/dvs/dist'));
+}
+
 app.use((error, req, res, next) => {
     if (res.headersSent) {
         return next(error);

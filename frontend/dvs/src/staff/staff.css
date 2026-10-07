@@ -186,6 +186,13 @@
 .staff-settings-submit { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; justify-content: flex-end; }
 .staff-settings-submit p { margin: 0; }
 .staff-location-status { margin-top: 20px; }
+.staff-share { margin-top: 28px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 28px; }
+.staff-share__content { min-width: 0; }
+.staff-share__content h2 { margin-top: 0; }
+.staff-share__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.staff-share__qr { text-align: center; background: white; }
+.staff-share__qr svg { display: block; width: 224px; max-width: 100%; height: auto; margin-inline: auto; }
+@media (max-width: 600px) { .staff-share { grid-template-columns: 1fr; } }
 .staff-result-tools { margin-top: 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .staff-result-tools h2 { margin: 0 0 8px; }
 .staff-result-tools p { margin: 0; }

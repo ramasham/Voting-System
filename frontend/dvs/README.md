@@ -18,6 +18,8 @@ Preview visitor states with `?demo=closed`, `not_started`, `server_error`, `rate
 
 ## Connect the real backend
 
+For a public HTTPS address that opens on phones and a printable voting QR, follow [the free deployment guide](../../DEPLOYMENT.md). The hosted admin panel generates the QR for the selected exhibition under Voting settings.
+
 Run the two servers from their own directories in separate terminals:
 
 ```sh
@@ -71,6 +73,14 @@ Secrets are encrypted with AES-256-GCM before database storage. Keep the key in 
 Real visitor names and verified phones remain in PostgreSQL, linked to votes. The browser stores its short-lived bearer token in session storage. OTP/password hashes, shared rate limits, unique phone numbers, and one-vote-per-category constraints are enforced by the backend. Configure restricted database access, transport encryption, backups, and the event's outreach consent/retention policy for deployment.
 
 The existing PostGIS flow requires an organizer anchor and at least three trusted samples before GPS-only access is ready. Verified visitors on the approved network submit samples through the location API. Approved network access or an enabled, ready location zone authorizes voting. Browser coordinates are not device-attested.
+
+### Test recording the venue location
+
+Open `http://localhost:8443/admin` directly on your computer. Location requires a secure browser context; localhost works for local testing, while an HTTP LAN address such as `http://192.168.1.10:8443` does not. A phone accessing the app over the network needs HTTPS.
+
+Enable location verification in Voting settings, then select **Record venue location** and allow the browser's location request. In Zen, search its browser settings for Location and review the site's permission. Zen uses Firefox's codebase; [Firefox's location permission guide](https://support.mozilla.org/en-US/kb/does-firefox-share-my-location-websites) describes the permission controls. A device location still needs to be available after permission is granted.
+
+The interface distinguishes blocked permission, unavailable positioning, a 30-second timeout, and accuracy worse than the required 100 meters. Success records the organizer anchor immediately. The status remains **Waiting for location samples** until at least three trusted samples form a cluster around that anchor. Each event accepts one organizer anchor; use a separate test event for simulated coordinates.
 
 ## Validation and code
 

@@ -12,6 +12,7 @@
     "db:migrate": "node-pg-migrate up --migrations-dir db/migrations --envPath .env",
     "db:seed": "node db/seeds/initial-data.js",
     "admin:create": "node scripts/create-admin.js",
+    "sms:check": "node scripts/check-sms.js",
     "test": "node --test tests/*.test.js",
     "test:integration": "node --test tests/integration/*.test.js"
   },

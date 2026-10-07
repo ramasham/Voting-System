@@ -4,6 +4,7 @@ import { staffCopy } from "../i18n/staff"
 import { staffApi, staffMode } from "../services/staff"
 import type { EventSettings } from "../services/staff-types"
 import StaffIcon from "./StaffIcon"
+import VotingShare from "./VotingShare"
 import {
   ammanInput,
   ammanIso,
@@ -35,6 +36,7 @@ export default function VotingSettings({
   const [ranges, setRanges] = useState(settings.allowed_ip_ranges ?? "")
   const [location, setLocation] = useState(settings.location_enabled)
   const [busy, setBusy] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const status = votingStatus(settings)
@@ -71,14 +73,21 @@ export default function VotingSettings({
     )
   }
   const anchor = () => {
+    setError("")
+    setNotice("")
+    if (!window.isSecureContext) {
+      setError(t.locationInsecure)
+      return
+    }
     if (!navigator.geolocation) {
-      setError(t.locationError)
+      setError(t.locationUnsupported)
       return
     }
     setBusy(true)
-    setError("")
+    setLocating(true)
     navigator.geolocation.getCurrentPosition(
       (p) => {
+        setLocating(false)
         void perform(
           () =>
             staffApi.anchor(token, event, {
@@ -86,14 +95,20 @@ export default function VotingSettings({
               longitude: p.coords.longitude,
               accuracy: p.coords.accuracy,
             }),
-          t.saved,
+          t.anchorSaved,
         )
       },
-      () => {
+      (error) => {
         setBusy(false)
-        setError(t.locationError)
+        setLocating(false)
+        const messages: Record<number, string> = {
+          1: t.locationDenied,
+          2: t.locationUnavailable,
+          3: t.locationTimeout,
+        }
+        setError(messages[error.code] ?? t.locationError)
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
     )
   }
   return (
@@ -200,7 +215,7 @@ export default function VotingSettings({
                 onClick={anchor}
               >
                 <StaffIcon name="pin" size={18} />
-                {t.captureAnchor}
+                {locating ? t.locating : t.captureAnchor}
               </button>
             </div>
           )}
@@ -225,6 +240,7 @@ export default function VotingSettings({
           </button>
         </div>
       </form>
+      <VotingShare event={event} lang={lang} />
       <section className="staff-panel staff-result-tools">
         <div>
           <h2>{t.resultsTools}</h2>
