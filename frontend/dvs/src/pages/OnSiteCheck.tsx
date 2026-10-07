@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Language } from "../data/config";
 import { copy } from "../i18n/copy";
 import { StateScreen } from "../components/StateScreen";
@@ -12,6 +12,7 @@ type Phase =
   | "ask_location"
   | "locating"
   | "denied"
+  | "blocked"
   | "unavailable"
   | "timeout"
   | "insecure"
@@ -41,6 +42,8 @@ export function OnSiteCheck({
   const [phase, setPhase] = useState<Phase>(config.requireNetworkCheck ? "network" : config.requireLocation ? "ask_location" : "ok");
   const [attempt, setAttempt] = useState(0);
   const [networkVerified, setNetworkVerified] = useState(false);
+  const locationPending = useRef(false);
+  const locationWasDenied = useRef(false);
 
   const finish = () => {
     setPhase("ok");
@@ -68,25 +71,35 @@ export function OnSiteCheck({
     return () => window.clearTimeout(timer);
   }, [phase, onVerified]);
 
-  const sendLocation = (position: { latitude: number; longitude: number; accuracy: number }) =>
-    api
-      .checkLocation(position)
-      .then(finish)
-      .catch((error) => {
-        const code = errorCode(error);
-        setPhase(code === "OFF_SITE_LOCATION" ? "off_site" : code === "LOCATION_INACCURATE" ? "inaccurate" : code === "LOCATION_NOT_READY" ? "not_ready" : "error");
-      });
-
-  const askLocation = () => {
+  const askLocation = useCallback(() => {
+    if (locationPending.current) return;
+    locationPending.current = true;
     setPhase("locating");
+    const showResult = (result: Phase) => {
+      locationPending.current = false;
+      setPhase(result);
+    };
+    const denyLocation = () => {
+      showResult(locationWasDenied.current ? "blocked" : "denied");
+      locationWasDenied.current = true;
+    };
+    const sendLocation = (position: { latitude: number; longitude: number; accuracy: number }) =>
+      api
+        .checkLocation(position)
+        .then(() => showResult("ok"))
+        .catch((error) => {
+          const code = errorCode(error);
+          showResult(code === "OFF_SITE_LOCATION" ? "off_site" : code === "LOCATION_INACCURATE" ? "inaccurate" : code === "LOCATION_NOT_READY" ? "not_ready" : "error");
+        });
+
     // Demo mode can simulate each browser outcome with ?demo=location_denied|location_unavailable|location_timeout|offsite_location
     const simulated: Record<string, Phase> = { location_denied: "denied", location_unavailable: "unavailable", location_timeout: "timeout", offsite_location: "off_site" };
     if (api.mode === "mock" && simulated[demo]) {
-      window.setTimeout(() => setPhase(simulated[demo]), 800);
+      window.setTimeout(() => demo === "location_denied" ? denyLocation() : showResult(simulated[demo]), 800);
       return;
     }
     if (api.mode === "http" && !window.isSecureContext) {
-      setPhase("insecure");
+      showResult("insecure");
       return;
     }
     if (api.mode === "mock" && !navigator.geolocation) {
@@ -94,21 +107,48 @@ export function OnSiteCheck({
       return;
     }
     if (!navigator.geolocation) {
-      setPhase("unavailable");
+      showResult("unavailable");
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        locationWasDenied.current = false;
         if (position.coords.accuracy > 100) {
-          setPhase("inaccurate");
+          showResult("inaccurate");
           return;
         }
         void sendLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy });
       },
-      (error) => setPhase(error.code === 1 ? "denied" : error.code === 3 ? "timeout" : "unavailable"),
+      (error) => error.code === 1 ? denyLocation() : showResult(error.code === 3 ? "timeout" : "unavailable"),
       { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
     );
-  };
+  }, []);
+
+  useEffect(() => {
+    if (api.mode !== "http" || (phase !== "denied" && phase !== "blocked") || !navigator.permissions) return;
+    let alive = true;
+    let permission: PermissionStatus | undefined;
+    const retryIfAllowed = () => {
+      if (alive && document.visibilityState === "visible" && permission?.state === "granted") askLocation();
+    };
+    // Browsers can remember a denial. Resume after the visitor allows the site
+    // in browser settings; never try to override a saved block or keep prompting.
+    void navigator.permissions.query({ name: "geolocation" }).then((status) => {
+      if (!alive) return;
+      permission = status;
+      permission.addEventListener("change", retryIfAllowed);
+    }).catch(() => {
+      // Some browsers do not support querying geolocation permission. Manual retry still works.
+    });
+    window.addEventListener("focus", retryIfAllowed);
+    document.addEventListener("visibilitychange", retryIfAllowed);
+    return () => {
+      alive = false;
+      permission?.removeEventListener("change", retryIfAllowed);
+      window.removeEventListener("focus", retryIfAllowed);
+      document.removeEventListener("visibilitychange", retryIfAllowed);
+    };
+  }, [phase, askLocation]);
 
   const retryNetwork = () => {
     setNetworkVerified(false);
@@ -127,8 +167,8 @@ export function OnSiteCheck({
   if (phase === "ask_location")
     return <StateScreen {...common} action={{ label: t.allowLoc, onClick: askLocation }} body={t.askLocBody} icon="pin" title={t.askLocTitle} />;
   if (phase === "locating") return <StateScreen {...common} spinner title={t.locating} body={t.checkNetBody} />;
-  if (phase === "denied")
-    return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.deniedBody} icon="pin" notes={[t.deniedIos, t.deniedAndroid]} title={t.deniedTitle} tone="error" />;
+  if (phase === "denied" || phase === "blocked")
+    return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={networkVerified ? t.deniedNetworkBody : t.deniedBody} icon="pin" notes={[t.deniedBrowser, t.deniedIos, t.deniedAndroid]} title={phase === "blocked" ? t.blockedTitle : t.deniedTitle} tone="error" />;
   if (phase === "unavailable")
     return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.unavailBody} icon="pin" title={t.unavailTitle} tone="yellow" />;
   if (phase === "timeout")

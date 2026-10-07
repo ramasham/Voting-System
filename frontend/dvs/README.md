@@ -86,6 +86,8 @@ Scanning the visitor QR only opens the page. During the open voting window, visi
 
 Visitors whose network check passes can continue using venue Wi-Fi if location is blocked or unavailable. GPS-only visitors can proceed as soon as the admin records the venue location. HTTP QR links display an HTTPS warning; use the deployed HTTPS link on phones.
 
+After a visitor denies location, **Try again** requests a fresh position. A repeated denial shows **Location is still blocked** and explains how to allow the site in browser settings; a website cannot force a new permission prompt while the browser remembers a block. GPS-only visitors see that location access is required to vote. When the browser supports geolocation permission updates, granting access or returning to the page with access allowed automatically retries location verification.
+
 ## Validation and code
 
 Run `pnpm exec tsc --noEmit` and `pnpm build` here, and `npm test` in `../../backend`. See [the API contract](docs/API_CONTRACT.md) for requests and security behavior.

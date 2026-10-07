@@ -78,6 +78,14 @@ In the deployed admin panel, open **Voting settings → Voting link and QR code*
 
 Scan it with a second phone. Verify that it opens the correct HTTPS address, gets through the venue check on the approved network, receives the real SMS OTP, and records a test vote. Confirm the vote appears in admin results. Use a test event for test votes rather than clearing real votes afterward.
 
+## Publish future changes
+
+Use `integration/all-work` for development and `deployment/phone-qr` for deployment. Keep the Render service's **Branch** set to `deployment/phone-qr` and **Auto-Deploy** set to **On Commit**. The Blueprint explicitly records these settings.
+
+For each release, commit and push the tested development changes, then merge `integration/all-work` into the deployment checkout. Resolve overlapping changes while preserving the deployment setup, run the frontend type check and build and the backend tests, and push `deployment/phone-qr`. If the deployment branch is already open in another Git worktree, perform the merge and push in that checkout.
+
+Render builds the pushed deployment branch. Wait for its latest deploy to show **Live**, then check the visitor and admin URLs. A successful Git push confirms the repository update; the live website is updated after a successful Render deploy. Locally saved files and commits pushed only to the development branch do not update the deployed app.
+
 ## Free hosting limits
 
 [Render Free](https://render.com/docs/free) services sleep after 15 minutes without inbound traffic and can take about a minute to wake. Open the app before phone testing; a sleeping service can outlast the frontend's request timeout. Render recommends free services for preview/hobby use, not production applications. [Neon Free](https://neon.com/pricing) also has compute, storage, and transfer quotas. Review these before an exhibition expecting sustained participation.
