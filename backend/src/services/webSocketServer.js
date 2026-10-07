@@ -4,11 +4,17 @@ const { castVote, VoteError } = require('./vote.service');
 const { voteRateLimit } = require('../middleware/rateLimit.middleware');
 const { parsePositiveInteger } = require('../utils/validation');
 const resultsNotifier = require('./resultsNotifier');
+const pool = require('../../db/connection');
+const proxyaddr = require('proxy-addr');
 
 let webSocketServer;
 
 function send(socket, message) {
     if (socket.readyState === WebSocket.OPEN) {
+        if (socket.bufferedAmount > 64 * 1024) {
+            socket.terminate();
+            return;
+        }
         try {
             socket.send(JSON.stringify(message));
         } catch (error) {
@@ -19,7 +25,7 @@ function send(socket, message) {
     }
 }
 
-function authenticate(socket, token) {
+function authenticate(token) {
     if (typeof token !== 'string' || token.length === 0) return null;
     for (const role of ['visitor', 'admin']) {
         try {
@@ -32,51 +38,59 @@ function authenticate(socket, token) {
 }
 
 async function handleMessage(socket, clientIp, message) {
-    if (!socket.auth) {
-        if (message.type === 'AUTH') {
-            const auth = authenticate(socket, message.token);
-            if (!auth) {
-                send(socket, { type: 'AUTH_ERROR', code: 'INVALID_TOKEN' });
-                return;
-            }
-            socket.auth = auth;
-            send(socket, { type: 'AUTH_SUCCESS' });
-            return;
-        }
-
-        if (message.type === 'CAST_VOTE') {
-            send(socket, {
-                type: 'VOTE_REJECTED',
-                code: 'AUTHENTICATION_REQUIRED'
-            });
-        } else {
-            send(socket, {
-                type: 'ERROR',
-                code: 'AUTHENTICATION_REQUIRED'
-            });
-        }
-        return;
-    }
-
     if (message.type === 'AUTH') {
-        const auth = authenticate(socket, message.token);
+        // A new identity must not inherit the previous identity's subscriptions.
+        resultsNotifier.removeSocket(socket);
+        clearTimeout(socket.authTimer);
+        socket.auth = null;
+        const auth = authenticate(message.token);
         if (!auth) {
             send(socket, { type: 'AUTH_ERROR', code: 'INVALID_TOKEN' });
+            socket.close(1008, 'Invalid access token');
             return;
         }
         socket.auth = auth;
+        socket.authTimer = setTimeout(() => {
+            resultsNotifier.removeSocket(socket);
+            socket.auth = null;
+            send(socket, { type: 'AUTH_ERROR', code: 'TOKEN_EXPIRED' });
+            socket.close(1008, 'Access token expired');
+        }, Math.min(auth.expiresAt * 1000 - Date.now(), 2147483647));
+        socket.authTimer.unref();
         send(socket, { type: 'AUTH_SUCCESS' });
         return;
     }
 
+    if (!socket.auth || socket.auth.expiresAt <= Date.now() / 1000) {
+        resultsNotifier.removeSocket(socket);
+        socket.auth = null;
+        send(socket, {
+            type: message.type === 'CAST_VOTE' ? 'VOTE_REJECTED' : 'ERROR',
+            code: 'AUTHENTICATION_REQUIRED'
+        });
+        return;
+    }
+
     if (message.type === 'SUBSCRIBE_RESULTS') {
+        if (socket.auth.role !== 'admin') {
+            send(socket, { type: 'ERROR', code: 'ADMIN_AUTH_REQUIRED' });
+            return;
+        }
         const eventId = parsePositiveInteger(message.eventId);
         if (!eventId) {
             send(socket, { type: 'ERROR', code: 'INVALID_EVENT_ID' });
             return;
         }
+        const event = await pool.query('SELECT id FROM events WHERE id = $1', [eventId]);
+        if (event.rowCount === 0) {
+            send(socket, { type: 'ERROR', code: 'EVENT_NOT_FOUND' });
+            return;
+        }
+        // The auth timer can expire while the event lookup is in flight.
+        if (socket.auth?.role !== 'admin' || socket.auth.expiresAt <= Date.now() / 1000) return;
         resultsNotifier.subscribe(socket, eventId);
         send(socket, { type: 'RESULTS_SUBSCRIBED', eventId });
+        send(socket, { type: 'RESULTS_UPDATED', eventId, timestamp: new Date().toISOString() });
         return;
     }
 
@@ -86,7 +100,8 @@ async function handleMessage(socket, clientIp, message) {
             return;
         }
 
-        const limit = voteRateLimit.consume(clientIp || 'unknown');
+        const visitorId = socket.auth.id;
+        const limit = await voteRateLimit.consume(`visitor:${visitorId}`);
         if (!limit.allowed) {
             send(socket, { type: 'VOTE_REJECTED', code: 'RATE_LIMITED' });
             return;
@@ -97,8 +112,9 @@ async function handleMessage(socket, clientIp, message) {
                 eventId: message.eventId,
                 categoryId: message.categoryId,
                 exhibitorId: message.exhibitorId,
-                visitorId: socket.auth.id,
-                clientIp
+                visitorId,
+                clientIp,
+                coordinates: message.location,
             });
 
             // The vote service returns only after PostgreSQL COMMIT succeeds.
@@ -106,9 +122,9 @@ async function handleMessage(socket, clientIp, message) {
                 type: 'VOTE_ACCEPTED',
                 eventId: vote.event_id,
                 categoryId: vote.category_id,
-                exhibitorId: vote.exhibitor_id
+                exhibitorId: vote.exhibitor_id,
+                replayed: vote.replayed,
             });
-            resultsNotifier.publishResultsUpdated(vote.event_id);
         } catch (error) {
             if (error instanceof VoteError) {
                 send(socket, { type: 'VOTE_REJECTED', code: error.code });
@@ -123,7 +139,7 @@ async function handleMessage(socket, clientIp, message) {
     send(socket, { type: 'ERROR', code: 'UNKNOWN_MESSAGE_TYPE' });
 }
 
-function attachWebSocketServer(server) {
+function attachWebSocketServer(server, app) {
     if (webSocketServer) return webSocketServer;
 
     webSocketServer = new WebSocket.WebSocketServer({
@@ -131,12 +147,19 @@ function attachWebSocketServer(server) {
         path: '/ws',
         maxPayload: 16 * 1024
     });
+    resultsNotifier.start();
     webSocketServer.on('connection', (socket, request) => {
         socket.isAlive = true;
         socket.auth = null;
         socket.resultSubscriptions = new Set();
-        // Use the TCP peer from the upgrade request; never accept a client-supplied IP.
-        const clientIp = request.socket.remoteAddress;
+        socket.messageQueue = Promise.resolve();
+        socket.pendingMessages = 0;
+        // Match Express's explicitly configured trusted proxy rules for HTTP voting.
+        const clientIp = app
+            ? proxyaddr(request, app.get('trust proxy fn'))
+            : request.socket.remoteAddress;
+        socket.authTimer = setTimeout(() => socket.close(1008, 'Authentication required'), 10000);
+        socket.authTimer.unref();
 
         socket.on('pong', () => { socket.isAlive = true; });
         socket.on('message', (data, isBinary) => {
@@ -156,12 +179,22 @@ function attachWebSocketServer(server) {
                 return;
             }
 
-            handleMessage(socket, clientIp, message).catch((error) => {
+            if (socket.pendingMessages >= 32) {
+                send(socket, { type: 'ERROR', code: 'RATE_LIMITED' });
+                return;
+            }
+            socket.pendingMessages += 1;
+            socket.messageQueue = socket.messageQueue.then(async () => {
+                if (socket.readyState === WebSocket.OPEN) await handleMessage(socket, clientIp, message);
+            }).catch((error) => {
                 console.error('WebSocket message failed:', error.message);
                 send(socket, { type: 'ERROR', code: 'REQUEST_FAILED' });
-            });
+            }).finally(() => { socket.pendingMessages -= 1; });
         });
-        socket.on('close', () => resultsNotifier.removeSocket(socket));
+        socket.on('close', () => {
+            clearTimeout(socket.authTimer);
+            resultsNotifier.removeSocket(socket);
+        });
         socket.on('error', (error) => {
             if (process.env.NODE_ENV !== 'production') {
                 console.info(`[websocket] client error: ${error.message}`);
@@ -181,7 +214,11 @@ function attachWebSocketServer(server) {
     }, 30000);
     heartbeat.unref();
 
-    webSocketServer.on('close', () => clearInterval(heartbeat));
+    webSocketServer.on('close', () => {
+        clearInterval(heartbeat);
+        webSocketServer = undefined;
+        void resultsNotifier.stop();
+    });
     return webSocketServer;
 }
 

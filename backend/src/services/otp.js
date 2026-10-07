@@ -25,7 +25,8 @@ function hashOtp(visitorId, otp) {
 }
 
 function otpMatches(visitorId, otp, storedHash) {
-  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp) ||
+      typeof storedHash !== 'string' || !/^[0-9a-f]{64}$/i.test(storedHash)) {
     return false;
   }
 

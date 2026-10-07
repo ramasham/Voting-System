@@ -4,7 +4,7 @@ async function adminApiRateLimit(req, res, next) {
   try {
     const allowed = await isWithinRateLimit(
       'admin-api',
-      req.ip || req.socket.remoteAddress || 'unknown',
+      req.auth ? `admin:${req.auth.id}` : req.ip || req.socket?.remoteAddress || 'unknown',
       300,
       60 * 1000
     );

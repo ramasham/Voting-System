@@ -1,6 +1,8 @@
 const MIN_CLUSTER_SAMPLES = 3;
 const DBSCAN_RADIUS_METERS = 75;
 const ZONE_BUFFER_METERS = 30;
+const MAX_LOCATION_ACCURACY_METERS = 100;
+const { ipIsAllowed } = require('../utils/validation');
 
 function parseCoordinates(body) {
   const latitude = body?.latitude;
@@ -44,19 +46,17 @@ async function insertSample(client, { eventId, source, visitorId, adminId, coord
 async function rebuildEventZone(client, eventId) {
   const result = await client.query(
     `WITH projected AS (
-       SELECT id, location, ST_Transform(location, 3857) AS metric_location
+       SELECT id, source, location, ST_Transform(location, 3857) AS metric_location
        FROM event_location_samples
        WHERE event_id = $1
      ), clustered AS (
-       SELECT id, location,
-              ST_ClusterDBSCAN(metric_location, $2, $3) OVER () AS cluster_id
+       SELECT id, source, location,
+              ST_ClusterDBSCAN(metric_location, $2, $3) OVER (ORDER BY id) AS cluster_id
        FROM projected
-     ), largest_cluster AS (
+     ), anchor_cluster AS (
        SELECT cluster_id
        FROM clustered
-       WHERE cluster_id IS NOT NULL
-       GROUP BY cluster_id
-       ORDER BY COUNT(*) DESC, cluster_id
+       WHERE source = 'organizer_anchor' AND cluster_id IS NOT NULL
        LIMIT 1
      ), zone AS (
        SELECT ST_Multi(
@@ -66,7 +66,7 @@ async function rebuildEventZone(client, eventId) {
                 )::geometry
               )::geometry(MultiPolygon,4326) AS geofence
        FROM clustered
-       JOIN largest_cluster USING (cluster_id)
+       JOIN anchor_cluster USING (cluster_id)
        GROUP BY clustered.cluster_id
        HAVING COUNT(*) >= $3
      ), sample_total AS (
@@ -93,9 +93,46 @@ async function rebuildEventZone(client, eventId) {
   return result.rows[0];
 }
 
+async function checkVenueAccess(client, { eventId, settings, clientIp, coordinates }) {
+  const reject = (code, status, message) => ({ allowed: false, code, status, message });
+  const hasRanges = typeof settings.allowed_ip_ranges === 'string' && settings.allowed_ip_ranges.trim() !== '';
+  if (hasRanges && clientIp) {
+    try {
+      if (ipIsAllowed(clientIp, settings.allowed_ip_ranges)) return { allowed: true, method: 'network' };
+    } catch {
+      return reject('VENUE_ACCESS_UNAVAILABLE', 503, 'Venue network configuration is invalid');
+    }
+  }
+
+  if (settings.location_enabled && settings.location_ready) {
+    const location = parseCoordinates(coordinates);
+    if (!location) {
+      return reject('LOCATION_REQUIRED', 403, 'Connect to the event network or provide your device location');
+    }
+    if (location.accuracy !== null && location.accuracy > MAX_LOCATION_ACCURACY_METERS) {
+      return reject('LOCATION_INACCURATE', 403, 'Location accuracy is insufficient; connect to the event network');
+    }
+    const result = await client.query(
+      `SELECT ST_Covers(location_zone, ST_SetSRID(ST_MakePoint($2, $3), 4326)) AS inside
+       FROM event_settings
+       WHERE event_id = $1 AND location_enabled = TRUE AND location_zone IS NOT NULL`,
+      [eventId, location.longitude, location.latitude]
+    );
+    if (result.rows[0]?.inside === true) return { allowed: true, method: 'location' };
+    return reject('OUTSIDE_VENUE', 403, 'Voting is only available inside the venue');
+  }
+
+  if (!hasRanges) {
+    return reject('VENUE_ACCESS_NOT_CONFIGURED', 503, 'Venue access is not configured for this event');
+  }
+  return reject('OUTSIDE_VENUE', 403, 'Voting is only available inside the venue');
+}
+
 module.exports = {
   MIN_CLUSTER_SAMPLES,
+  MAX_LOCATION_ACCURACY_METERS,
   parseCoordinates,
   insertSample,
   rebuildEventZone,
+  checkVenueAccess,
 };

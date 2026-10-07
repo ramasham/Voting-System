@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const ISSUER = 'maker-collective-voting';
 
 function secretFor(role) {
+  if (!['admin', 'visitor'].includes(role)) throw new Error('Invalid token role');
   const envName = role === 'admin' ? 'ADMIN_TOKEN_SECRET' : 'VISITOR_TOKEN_SECRET';
   const secret = process.env[envName];
 
@@ -22,6 +23,10 @@ function signature(input, secret) {
 }
 
 function issueToken({ subject, role, expiresInSeconds }) {
+  if (!Number.isSafeInteger(Number(subject)) || Number(subject) < 1 ||
+      !Number.isSafeInteger(expiresInSeconds) || expiresInSeconds < 1) {
+    throw new Error('Invalid token claims');
+  }
   const secret = secretFor(role);
   const now = Math.floor(Date.now() / 1000);
   const header = encode({ alg: 'HS256', typ: 'JWT' });
@@ -39,7 +44,7 @@ function issueToken({ subject, role, expiresInSeconds }) {
 }
 
 function verifyToken(token, expectedRole) {
-  if (typeof token !== 'string') {
+  if (typeof token !== 'string' || token.length > 4096) {
     throw new Error('Invalid token');
   }
 
@@ -57,7 +62,7 @@ function verifyToken(token, expectedRole) {
     throw new Error('Invalid token');
   }
 
-  if (header.alg !== 'HS256' || header.typ !== 'JWT') {
+  if (!header || !payload || header.alg !== 'HS256' || header.typ !== 'JWT') {
     throw new Error('Invalid token');
   }
 
@@ -78,10 +83,11 @@ function verifyToken(token, expectedRole) {
     payload.role !== expectedRole ||
     !Number.isSafeInteger(subjectId) ||
     subjectId < 1 ||
-    !Number.isInteger(payload.exp) ||
+    !Number.isSafeInteger(payload.exp) ||
     payload.exp <= now ||
-    !Number.isInteger(payload.iat) ||
-    payload.iat > now + 60
+    !Number.isSafeInteger(payload.iat) ||
+    payload.iat > now + 60 ||
+    payload.exp <= payload.iat
   ) {
     throw new Error('Invalid token');
   }

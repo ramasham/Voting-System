@@ -57,6 +57,10 @@ async function captureOrganizerAnchor(req, res) {
     });
   }
 
+  if (coordinates.accuracy > locationVerification.MAX_LOCATION_ACCURACY_METERS) {
+    return res.status(400).json({ success: false, code: 'LOCATION_INACCURATE', message: 'Use a location with accuracy of 100 meters or better' });
+  }
+
   let client;
   try {
     client = await pool.connect();
@@ -131,10 +135,20 @@ async function captureTrustedNetworkSample(req, res) {
     });
   }
 
+  if (coordinates.accuracy > locationVerification.MAX_LOCATION_ACCURACY_METERS) {
+    return res.status(400).json({ success: false, code: 'LOCATION_INACCURATE', message: 'Use a location with accuracy of 100 meters or better' });
+  }
+
   let client;
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+
+    const event = await client.query('SELECT id FROM events WHERE id = $1 FOR KEY SHARE', [eventId]);
+    if (event.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
 
     const settingsResult = await client.query(
       `SELECT allowed_ip_ranges, location_enabled
@@ -172,6 +186,12 @@ async function captureTrustedNetworkSample(req, res) {
         code: 'TRUSTED_NETWORK_REQUIRED',
         message: 'Trusted location samples can only be submitted from the event network',
       });
+    }
+
+    const visitor = await client.query('SELECT phone_verified FROM visitors WHERE id = $1 FOR SHARE', [req.auth.id]);
+    if (!visitor.rows[0]?.phone_verified) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, code: 'PHONE_NOT_VERIFIED', message: 'Verify your phone number before submitting a location sample' });
     }
 
     const anchorResult = await client.query(

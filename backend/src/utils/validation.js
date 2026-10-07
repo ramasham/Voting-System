@@ -22,7 +22,7 @@ function normalizePhoneNumber(value) {
 
   if (digits.startsWith('00')) {
     digits = `+${digits.slice(2)}`;
-  } else if (/^0\d+$/.test(digits)) {
+  } else if (/^07[789]\d{7}$/.test(digits)) {
     // Jordanian local numbers such as 079... are stored in E.164 format.
     digits = `+962${digits.slice(1)}`;
   } else if (!digits.startsWith('+')) {
@@ -30,6 +30,12 @@ function normalizePhoneNumber(value) {
   }
 
   if (!/^\+[1-9]\d{7,14}$/.test(digits)) {
+    return null;
+  }
+
+  // Do not accept a second identity for a Jordanian mobile with its domestic
+  // trunk prefix accidentally retained after the country calling code.
+  if (digits.startsWith('+962') && !/^\+9627[789]\d{7}$/.test(digits)) {
     return null;
   }
 
@@ -57,7 +63,10 @@ function normalizeAllowedIpRanges(value) {
     }
 
     const range = item.trim();
-    ipaddr.parseCIDR(range);
+    const [, prefix] = ipaddr.parseCIDR(range);
+    if (prefix === 0) {
+      throw new Error('Allowed IP ranges must be specific venue networks, not the entire internet');
+    }
     return range;
   });
 
@@ -78,11 +87,36 @@ function parseOptionalDate(value) {
   }
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (Number.isNaN(date.getTime()) || month < 1 || month > 12 || day < 1 || day > daysInMonth) {
     throw new Error('Date value is invalid');
   }
 
   return date.toISOString();
+}
+
+function ipIsAllowed(clientIp, configuredRanges) {
+  let address = ipaddr.parse(clientIp);
+  if (address.kind() === 'ipv6' && address.isIPv4MappedAddress()) {
+    address = address.toIPv4Address();
+  }
+  if (typeof configuredRanges !== 'string') return false;
+
+  // Validate all ranges before comparing, so malformed configuration never
+  // becomes dependent on which valid range happens to appear first.
+  const ranges = configuredRanges.split(',').map((range) => {
+    let [network, prefix] = ipaddr.parseCIDR(range.trim());
+    if (network.kind() === 'ipv6' && network.isIPv4MappedAddress() && prefix >= 96) {
+      network = network.toIPv4Address();
+      prefix -= 96;
+    }
+    if (prefix === 0) throw new Error('Unrestricted venue network is not allowed');
+    return [network, prefix];
+  });
+  return ranges.some(([network, prefix]) => (
+    address.kind() === network.kind() && address.match(network, prefix)
+  ));
 }
 
 function validateName(value, fieldName = 'name') {
@@ -141,4 +175,5 @@ module.exports = {
   validateName,
   validateDescription,
   validateImageUrl,
+  ipIsAllowed,
 };

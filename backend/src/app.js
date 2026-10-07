@@ -11,6 +11,15 @@ const adminRoutes = require('./routes/admin.routes');
 const votesRoutes = require('./routes/votes.routes');
 
 const app = express();
+const pool = require('../db/connection');
+const { getExhibitorPhoto } = require('./controllers/media.controller');
+
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'no-store');
+    next();
+});
 
 const trustProxy = process.env.TRUST_PROXY;
 
@@ -33,11 +42,21 @@ app.use('/api/events/:eventId/votes', votesRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use('/api/results', resultsRoutes);
+app.get('/api/media/exhibitors/:exhibitorId/photo', getExhibitorPhoto);
 
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'ok'
     });
+});
+
+app.get('/ready', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        res.status(200).json({ status: 'ready' });
+    } catch {
+        res.status(503).json({ status: 'unavailable' });
+    }
 });
 
 app.get('/api/events/:eventId/venue-test', venueAccess, (req, res) => {

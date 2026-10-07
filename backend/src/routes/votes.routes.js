@@ -5,10 +5,11 @@ const votesController = require('../controllers/votes.controller');
 
 const router = express.Router({ mergeParams: true });
 
+router.get('/', authenticate('visitor'), votesController.getVotes);
+
 router.post(
     '/',
     authenticate('visitor'),
-    venueAccess,
     voteRateLimit,
     votesController.castVote
 );

@@ -1,7 +1,6 @@
 const express = require('express');
 const eventsController = require('../controllers/events.controller');
 const authenticate = require('../middleware/authenticate');
-const venueAccess = require('../middleware/venueAccess.middleware');
 const locationController = require('../controllers/location.controller');
 
 const router = express.Router();
@@ -13,7 +12,6 @@ router.get('/:eventId/location', locationController.getLocationStatus);
 router.post(
   '/:eventId/location/samples',
   authenticate('visitor'),
-  venueAccess,
   locationController.captureTrustedNetworkSample
 );
 

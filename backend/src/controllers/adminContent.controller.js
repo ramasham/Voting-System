@@ -111,56 +111,37 @@ async function createCategory(req, res) {
     });
   }
 
+  let client;
   try {
-    if (!(await eventExists(eventId))) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
+    client = await pool.connect();
+    await client.query('BEGIN');
+    // Serialize category changes and opening voting for this event.
+    const event = await client.query('SELECT id FROM events WHERE id = $1 FOR NO KEY UPDATE', [eventId]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Event not found' });
     }
-
-    const result = await pool.query(
-      `
-      INSERT INTO categories (
-        event_id,
-        name,
-        description,
-        display_order
-      )
-      VALUES ($1, $2, $3, $4)
-      RETURNING
-        id,
-        event_id,
-        name,
-        description,
-        display_order
-      `,
-      [
-        eventId,
-        name,
-        description,
-        displayOrder
-      ]
+    const count = await client.query('SELECT COUNT(*)::int AS count FROM categories WHERE event_id = $1', [eventId]);
+    if (count.rows[0].count >= 3) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, code: 'CATEGORY_LIMIT_REACHED', message: 'Each event supports exactly three award categories' });
+    }
+    const result = await client.query(
+      `INSERT INTO categories (event_id, name, description, display_order)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, event_id, name, description, display_order`,
+      [eventId, name, description, displayOrder]
     );
-
-    return res.status(201).json({
-      success: true,
-      data: result.rows[0]
-    });
-
+    await client.query('COMMIT');
+    return res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error(
-      'Admin category creation failed:',
-      error.message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to create category'
-    });
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Admin category creation failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to create category' });
+  } finally {
+    if (client) client.release();
   }
 }
-
 
 async function updateCategory(req, res) {
   const eventId = parsePositiveInteger(req.params.eventId);
@@ -313,6 +294,13 @@ async function deleteCategory(req, res) {
     client = await pool.connect();
 
     await client.query('BEGIN');
+    await client.query('SELECT id FROM events WHERE id = $1 FOR NO KEY UPDATE', [eventId]);
+    const settings = await client.query('SELECT voting_enabled FROM event_settings WHERE event_id = $1 FOR UPDATE', [eventId]);
+    if (settings.rows[0]?.voting_enabled) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, code: 'VOTING_MUST_BE_CLOSED', message: 'Close voting before deleting a category' });
+    }
+
 
     const category = await client.query(
       `
@@ -735,12 +723,12 @@ async function updateExhibitor(req, res) {
   if (Object.hasOwn(body, 'categoryIds')) {
 
     if (
-      !Array.isArray(body.categoryIds)
+      !Array.isArray(body.categoryIds) || body.categoryIds.length === 0
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'categoryIds must be an array'
+          'categoryIds must be a non-empty array'
       });
     }
 

@@ -5,6 +5,7 @@ const adminAuthController = require('../controllers/adminAuth.controller');
 const adminContentController = require('../controllers/adminContent.controller');
 const adminEventsController = require('../controllers/adminEvents.controller');
 const locationController = require('../controllers/location.controller');
+const mediaController = require('../controllers/media.controller');
 
 const router = express.Router();
 
@@ -27,8 +28,12 @@ router.get('/events/:eventId/exhibitors', adminContentController.getExhibitors);
 router.post('/events/:eventId/exhibitors', adminContentController.createExhibitor);
 router.patch('/events/:eventId/exhibitors/:exhibitorId', adminContentController.updateExhibitor);
 router.delete('/events/:eventId/exhibitors/:exhibitorId', adminContentController.deleteExhibitor);
+router.put('/events/:eventId/exhibitors/:exhibitorId/photo',
+  express.raw({ type: ['image/png', 'image/jpeg', 'image/webp'], limit: mediaController.MAX_PHOTO_BYTES }),
+  mediaController.uploadExhibitorPhoto);
 
 router.get('/events/:eventId/results', adminEventsController.getResults);
+router.post('/events/:eventId/results/reset', adminEventsController.resetResults);
 router.get('/events/:eventId/export.csv', adminEventsController.exportResults);
 
 module.exports = router;

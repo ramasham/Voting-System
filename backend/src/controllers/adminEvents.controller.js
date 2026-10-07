@@ -1,611 +1,214 @@
 const pool = require('../../db/connection');
+const { parsePositiveInteger, normalizeAllowedIpRanges, parseOptionalDate } = require('../utils/validation');
+const { getResults: loadResults } = require('../modules/results/results.service');
 
-const {
-  parsePositiveInteger,
-  normalizeAllowedIpRanges,
-  parseOptionalDate,
-} = require('../utils/validation');
-
+const settingsColumns = `event_id, voting_start_at, voting_end_at, voting_enabled,
+  allowed_ip_ranges, location_enabled, location_config,
+  (location_zone IS NOT NULL) AS location_ready`;
 
 function invalidEventId(res) {
-  return res.status(400).json({
-    success: false,
-    message: 'eventId must be a positive integer'
-  });
+  return res.status(400).json({ success: false, message: 'eventId must be a positive integer' });
 }
 
-
-async function eventExists(eventId) {
-  const result = await pool.query(
-    'SELECT 1 FROM events WHERE id = $1',
+async function ensureSettings(client, eventId) {
+  await client.query(
+    `INSERT INTO event_settings (event_id, voting_enabled, location_enabled)
+     VALUES ($1, FALSE, FALSE) ON CONFLICT (event_id) DO NOTHING`,
     [eventId]
   );
-
-  return result.rowCount > 0;
 }
-
-
-async function ensureSettings(eventId) {
-  await pool.query(
-    `
-    INSERT INTO event_settings (
-      event_id,
-      voting_enabled,
-      location_enabled
-    )
-    VALUES ($1, FALSE, FALSE)
-    ON CONFLICT (event_id) DO NOTHING
-    `,
-    [eventId]
-  );
-
-  const result = await pool.query(
-    `
-    SELECT
-      event_id,
-      voting_start_at,
-      voting_end_at,
-      voting_enabled,
-      allowed_ip_ranges,
-      location_enabled,
-      location_config
-    FROM event_settings
-    WHERE event_id = $1
-    `,
-    [eventId]
-  );
-
-  return result.rows[0];
-}
-
-
-/* =========================================================
-   GET SETTINGS
-========================================================= */
 
 async function getSettings(req, res) {
-  const eventId = parsePositiveInteger(
-    req.params.eventId
-  );
-
-  if (!eventId) {
-    return invalidEventId(res);
-  }
-
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
   try {
-    if (!(await eventExists(eventId))) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    const settings = await ensureSettings(eventId);
-
-    return res.status(200).json({
-      success: true,
-      data: settings
-    });
-
+    const event = await pool.query('SELECT id FROM events WHERE id = $1', [eventId]);
+    if (!event.rowCount) return res.status(404).json({ success: false, message: 'Event not found' });
+    await ensureSettings(pool, eventId);
+    const result = await pool.query(`SELECT ${settingsColumns} FROM event_settings WHERE event_id = $1`, [eventId]);
+    return res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error(
-      'Admin settings read failed:',
-      error.message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to load event settings'
-    });
+    console.error('Admin settings read failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to load event settings' });
   }
 }
-
-
-/* =========================================================
-   UPDATE SETTINGS
-========================================================= */
 
 async function updateSettings(req, res) {
-  const eventId = parsePositiveInteger(
-    req.params.eventId
-  );
-
-  if (!eventId) {
-    return invalidEventId(res);
-  }
-
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
   const body = req.body || {};
-
-  const allowedFields = [
-    'votingStartAt',
-    'votingEndAt',
-    'allowedIpRanges',
-    'locationEnabled'
-  ];
-
-  if (
-    Object.keys(body).some(
-      (field) => !allowedFields.includes(field)
-    )
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: 'Request contains an unsupported field'
-    });
+  const allowedFields = ['votingStartAt', 'votingEndAt', 'allowedIpRanges', 'locationEnabled'];
+  if (Object.keys(body).some((field) => !allowedFields.includes(field))) {
+    return res.status(400).json({ success: false, message: 'Request contains an unsupported field' });
   }
-
-  if (body.locationEnabled === true) {
-    return res.status(501).json({
-      success: false,
-      code: 'GEOLOCATION_NOT_IMPLEMENTED',
-      message:
-        'This server currently supports venue IP ranges, not GPS geofencing'
-    });
-  }
-
-  if (
-    Object.hasOwn(body, 'locationEnabled') &&
-    body.locationEnabled !== false
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: 'locationEnabled must be false'
-    });
-  }
-
   const assignments = [];
   const values = [eventId];
-
+  const parsed = {};
+  const add = (column, value) => {
+    values.push(value);
+    assignments.push(`${column} = $${values.length}`);
+  };
   try {
     if (Object.hasOwn(body, 'votingStartAt')) {
-      values.push(
-        parseOptionalDate(body.votingStartAt)
-      );
-
-      assignments.push(
-        `voting_start_at = $${values.length}`
-      );
+      parsed.start = parseOptionalDate(body.votingStartAt);
+      add('voting_start_at', parsed.start);
     }
-
     if (Object.hasOwn(body, 'votingEndAt')) {
-      values.push(
-        parseOptionalDate(body.votingEndAt)
-      );
-
-      assignments.push(
-        `voting_end_at = $${values.length}`
-      );
+      parsed.end = parseOptionalDate(body.votingEndAt);
+      add('voting_end_at', parsed.end);
     }
-
-    if (Object.hasOwn(body, 'allowedIpRanges')) {
-      values.push(
-        normalizeAllowedIpRanges(
-          body.allowedIpRanges
-        )
-      );
-
-      assignments.push(
-        `allowed_ip_ranges = $${values.length}`
-      );
-    }
-
+    if (Object.hasOwn(body, 'allowedIpRanges')) add('allowed_ip_ranges', normalizeAllowedIpRanges(body.allowedIpRanges));
     if (Object.hasOwn(body, 'locationEnabled')) {
-      values.push(false);
-
-      assignments.push(
-        `location_enabled = $${values.length}`
-      );
-
-      assignments.push(
-        'location_config = NULL'
-      );
+      if (typeof body.locationEnabled !== 'boolean') throw new Error('locationEnabled must be a boolean');
+      add('location_enabled', body.locationEnabled);
     }
-
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    return res.status(400).json({ success: false, message: error.message });
   }
+  if (!assignments.length) return res.status(400).json({ success: false, message: 'Provide at least one setting to update' });
 
-  if (assignments.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message:
-        'Provide at least one setting to update'
-    });
-  }
-
+  let client;
   try {
-    if (!(await eventExists(eventId))) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const event = await client.query('SELECT id FROM events WHERE id = $1 FOR NO KEY UPDATE', [eventId]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Event not found' });
     }
-
-    await ensureSettings(eventId);
-
-    const existing = await pool.query(
-      `
-      SELECT
-        voting_start_at,
-        voting_end_at
-      FROM event_settings
-      WHERE event_id = $1
-      `,
-      [eventId]
+    await ensureSettings(client, eventId);
+    const existing = await client.query(
+      'SELECT voting_start_at, voting_end_at FROM event_settings WHERE event_id = $1 FOR UPDATE', [eventId]
     );
-
-    const current = existing.rows[0];
-
-    const startValue =
-      Object.hasOwn(body, 'votingStartAt')
-        ? parseOptionalDate(body.votingStartAt)
-        : current.voting_start_at;
-
-    const endValue =
-      Object.hasOwn(body, 'votingEndAt')
-        ? parseOptionalDate(body.votingEndAt)
-        : current.voting_end_at;
-
-    if (
-      startValue &&
-      endValue &&
-      new Date(startValue) >= new Date(endValue)
-    ) {
-      return res.status(400).json({
-        success: false,
-        code: 'INVALID_VOTING_WINDOW',
-        message:
-          'Voting end time must be after its start time'
-      });
+    const start = Object.hasOwn(parsed, 'start') ? parsed.start : existing.rows[0].voting_start_at;
+    const end = Object.hasOwn(parsed, 'end') ? parsed.end : existing.rows[0].voting_end_at;
+    if (start && end && new Date(start) >= new Date(end)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, code: 'INVALID_VOTING_WINDOW', message: 'Voting end time must be after its start time' });
     }
-
-    assignments.push(
-      'updated_at = CURRENT_TIMESTAMP'
+    const result = await client.query(
+      `UPDATE event_settings SET ${assignments.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE event_id = $1 RETURNING ${settingsColumns}`, values
     );
-
-    const updated = await pool.query(
-      `
-      UPDATE event_settings
-
-      SET ${assignments.join(', ')}
-
-      WHERE event_id = $1
-
-      RETURNING
-        event_id,
-        voting_start_at,
-        voting_end_at,
-        voting_enabled,
-        allowed_ip_ranges,
-        location_enabled,
-        location_config
-      `,
-      values
-    );
-
-    return res.status(200).json({
-      success: true,
-      data: updated.rows[0]
-    });
-
+    await client.query('COMMIT');
+    return res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     if (error.code === '23514') {
-      return res.status(400).json({
-        success: false,
-        code: 'INVALID_VOTING_WINDOW',
-        message:
-          'Voting end time must be after its start time'
-      });
+      return res.status(400).json({ success: false, code: 'INVALID_VOTING_WINDOW', message: 'Voting end time must be after its start time' });
     }
-
-    console.error(
-      'Admin settings update failed:',
-      error.message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        'Unable to update event settings'
-    });
+    console.error('Admin settings update failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to update event settings' });
+  } finally {
+    if (client) client.release();
   }
 }
-
-
-/* =========================================================
-   OPEN VOTING
-========================================================= */
 
 async function openVoting(req, res) {
-  const eventId = parsePositiveInteger(
-    req.params.eventId
-  );
-
-  if (!eventId) {
-    return invalidEventId(res);
-  }
-
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
+  let client;
   try {
-    const eventResult = await pool.query(
-      `
-      SELECT 1
-      FROM events
-      WHERE id = $1
-      `,
-      [eventId]
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const event = await client.query('SELECT id FROM events WHERE id = $1 FOR NO KEY UPDATE', [eventId]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    await ensureSettings(client, eventId);
+    const result = await client.query(
+      `SELECT ${settingsColumns}, CURRENT_TIMESTAMP < voting_end_at AS window_not_ended
+       FROM event_settings WHERE event_id = $1 FOR UPDATE`, [eventId]
     );
-
-    if (eventResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
+    const settings = result.rows[0];
+    let rejection;
+    if (!settings.voting_start_at || !settings.voting_end_at) {
+      rejection = ['VOTING_WINDOW_REQUIRED', 'Set a voting start and end time before opening voting'];
+    } else if (!settings.window_not_ended) {
+      rejection = ['OUTSIDE_VOTING_WINDOW', 'The configured voting window has ended'];
+    } else if (!settings.allowed_ip_ranges?.trim() && !(settings.location_enabled && settings.location_ready)) {
+      rejection = ['VENUE_ACCESS_REQUIRED', 'Configure venue IP ranges or a ready location geofence before opening voting'];
     }
-
-    const opened = await pool.query(
-      `
-      UPDATE event_settings
-
-      SET
-        voting_enabled = TRUE,
-        updated_at = CURRENT_TIMESTAMP
-
-      WHERE event_id = $1
-        AND voting_start_at IS NOT NULL
-        AND voting_end_at IS NOT NULL
-        AND allowed_ip_ranges IS NOT NULL
-        AND BTRIM(allowed_ip_ranges) <> ''
-        AND location_enabled = FALSE
-        AND CURRENT_TIMESTAMP >= voting_start_at
-        AND CURRENT_TIMESTAMP < voting_end_at
-
-      RETURNING
-        event_id,
-        voting_start_at,
-        voting_end_at,
-        voting_enabled
-      `,
-      [eventId]
+    if (!rejection) {
+      const categories = await client.query(
+        `SELECT c.id, EXISTS (
+          SELECT 1 FROM exhibitor_category_assignments eca
+          WHERE eca.event_id = c.event_id AND eca.category_id = c.id
+         ) AS has_exhibitors FROM categories c WHERE c.event_id = $1`, [eventId]
+      );
+      if (categories.rowCount !== 3) {
+        rejection = ['THREE_CATEGORIES_REQUIRED', 'Configure exactly three award categories before opening voting'];
+      } else if (categories.rows.some((category) => !category.has_exhibitors)) {
+        rejection = ['CATEGORY_EXHIBITORS_REQUIRED', 'Assign at least one exhibitor to every category before opening voting'];
+      }
+    }
+    if (rejection) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, code: rejection[0], message: rejection[1] });
+    }
+    // Administrators may enable a future schedule; vote acceptance uses database time.
+    const opened = await client.query(
+      `UPDATE event_settings SET voting_enabled = TRUE, updated_at = CURRENT_TIMESTAMP
+       WHERE event_id = $1 RETURNING ${settingsColumns}`, [eventId]
     );
-
-    if (opened.rowCount > 0) {
-      return res.status(200).json({
-        success: true,
-        data: opened.rows[0]
-      });
-    }
-
-    const settingsResult = await pool.query(
-      `
-      SELECT
-        voting_start_at,
-        voting_end_at,
-        allowed_ip_ranges,
-        location_enabled
-      FROM event_settings
-      WHERE event_id = $1
-      `,
-      [eventId]
-    );
-
-    if (settingsResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event settings not found'
-      });
-    }
-
-    const settings = settingsResult.rows[0];
-
-    if (
-      !settings.voting_start_at ||
-      !settings.voting_end_at
-    ) {
-      return res.status(409).json({
-        success: false,
-        code: 'VOTING_WINDOW_REQUIRED',
-        message:
-          'Set a voting start and end time before opening voting'
-      });
-    }
-
-    if (
-      !settings.allowed_ip_ranges ||
-      settings.allowed_ip_ranges.trim() === ''
-    ) {
-      return res.status(409).json({
-        success: false,
-        code: 'VENUE_RANGES_REQUIRED',
-        message:
-          'Set the venue IP ranges before opening voting'
-      });
-    }
-
-    if (settings.location_enabled) {
-      return res.status(409).json({
-        success: false,
-        code: 'GEOLOCATION_NOT_IMPLEMENTED',
-        message:
-          'Disable GPS geofencing; this server supports venue IP ranges only'
-      });
-    }
-
-    return res.status(409).json({
-      success: false,
-      code: 'OUTSIDE_VOTING_WINDOW',
-      message:
-        'Voting can only be opened during its configured time window'
-    });
-
+    await client.query('COMMIT');
+    return res.status(200).json({ success: true, data: opened.rows[0] });
   } catch (error) {
-    console.error(
-      'Opening voting failed:',
-      error.message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to open voting'
-    });
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Opening voting failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to open voting' });
+  } finally {
+    if (client) client.release();
   }
 }
-
-
-/* =========================================================
-   CLOSE VOTING
-========================================================= */
 
 async function closeVoting(req, res) {
-  const eventId = parsePositiveInteger(
-    req.params.eventId
-  );
-
-  if (!eventId) {
-    return invalidEventId(res);
-  }
-
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
   try {
     const result = await pool.query(
-      `
-      UPDATE event_settings
-
-      SET
-        voting_enabled = FALSE,
-        updated_at = CURRENT_TIMESTAMP
-
-      WHERE event_id = $1
-
-      RETURNING
-        event_id,
-        voting_enabled
-      `,
-      [eventId]
+      `UPDATE event_settings SET voting_enabled = FALSE, updated_at = CURRENT_TIMESTAMP
+       WHERE event_id = $1 RETURNING event_id, voting_enabled`, [eventId]
     );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event settings not found'
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: result.rows[0]
-    });
-
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Event settings not found' });
+    return res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error(
-      'Closing voting failed:',
-      error.message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to close voting'
-    });
+    console.error('Closing voting failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to close voting' });
   }
 }
 
-
-/* =========================================================
-   LOAD RESULTS
-
-   Exhibitor can participate in multiple categories.
-========================================================= */
-
-async function loadResults(eventId) {
-  const event = await pool.query(
-    `
-    SELECT id, name
-    FROM events
-    WHERE id = $1
-    `,
-    [eventId]
-  );
-
-  if (event.rowCount === 0) {
-    return null;
-  }
-
-  const result = await pool.query(
-    `
-    SELECT
-      c.id AS category_id,
-      c.name AS category_name,
-      c.display_order,
-
-      e.id AS exhibitor_id,
-      e.name AS exhibitor_name,
-
-      COUNT(v.id)::integer AS vote_count
-
-    FROM categories c
-
-    LEFT JOIN exhibitor_category_assignments eca
-      ON eca.event_id = c.event_id
-     AND eca.category_id = c.id
-
-    LEFT JOIN exhibitors e
-      ON e.id = eca.exhibitor_id
-     AND e.event_id = eca.event_id
-
-    LEFT JOIN votes v
-      ON v.event_id = c.event_id
-     AND v.category_id = c.id
-     AND v.exhibitor_id = e.id
-
-    WHERE c.event_id = $1
-
-    GROUP BY
-      c.id,
-      c.name,
-      c.display_order,
-      e.id,
-      e.name
-
-    ORDER BY
-      c.display_order NULLS LAST,
-      c.id,
-      COUNT(v.id) DESC,
-      e.name NULLS LAST
-    `,
-    [eventId]
-  );
-
-  const categoryMap = new Map();
-
-  for (const row of result.rows) {
-    if (!categoryMap.has(row.category_id)) {
-      categoryMap.set(row.category_id, {
-        categoryId: row.category_id,
-        category: row.category_name,
-        exhibitors: []
-      });
+async function resetResults(req, res) {
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const event = await client.query('SELECT id FROM events WHERE id = $1 FOR NO KEY UPDATE', [eventId]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Event not found' });
     }
-
-    if (row.exhibitor_id !== null) {
-      categoryMap
-        .get(row.category_id)
-        .exhibitors
-        .push({
-          exhibitorId: row.exhibitor_id,
-          exhibitor: row.exhibitor_name,
-          votes: row.vote_count
-        });
+    // Conflicts with the shared settings lock held throughout castVote.
+    const settings = await client.query('SELECT voting_enabled FROM event_settings WHERE event_id = $1 FOR UPDATE', [eventId]);
+    if (settings.rows[0]?.voting_enabled) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, code: 'VOTING_MUST_BE_CLOSED', message: 'Close voting before resetting results' });
     }
+    const deleted = await client.query('DELETE FROM votes WHERE event_id = $1', [eventId]);
+    await client.query('COMMIT');
+    // The database notification trigger refreshes dashboards across API instances.
+    return res.status(200).json({ success: true, data: { eventId, deletedVotes: deleted.rowCount } });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Results reset failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to reset results' });
+  } finally {
+    if (client) client.release();
   }
-
-  return {
-    eventId: event.rows[0].id,
-    event: event.rows[0].name,
-    categories: [...categoryMap.values()]
-  };
 }
-
 
 /* =========================================================
    GET RESULTS
@@ -766,4 +369,5 @@ module.exports = {
   closeVoting,
   getResults,
   exportResults,
+  resetResults,
 };

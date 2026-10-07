@@ -22,7 +22,10 @@ function opaqueKey(scope, value) {
   return `${scope}:${digest}`;
 }
 
-async function isWithinRateLimit(scope, value, limit, windowMs) {
+async function consumeRateLimit(scope, value, limit, windowMs) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(windowMs) || windowMs < 1) {
+    throw new TypeError('Rate limits require a positive integer limit and window');
+  }
   const key = opaqueKey(scope, value);
   const windowId = Math.floor(Date.now() / windowMs);
   const result = await pool.query(
@@ -49,7 +52,17 @@ async function isWithinRateLimit(scope, value, limit, windowMs) {
     });
   }
 
-  return result.rows[0].hits <= limit;
+  const hits = result.rows[0].hits;
+  return {
+    allowed: hits <= limit,
+    limit,
+    remaining: Math.max(0, limit - hits),
+    resetAt: (windowId + 1) * windowMs,
+  };
 }
 
-module.exports = { isWithinRateLimit };
+async function isWithinRateLimit(scope, value, limit, windowMs) {
+  return (await consumeRateLimit(scope, value, limit, windowMs)).allowed;
+}
+
+module.exports = { isWithinRateLimit, consumeRateLimit };

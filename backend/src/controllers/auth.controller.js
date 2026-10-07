@@ -14,8 +14,13 @@ const { issueToken } = require('../services/tokens');
 const REGISTRATION_WINDOW_MS = 15 * 60 * 1000;
 const VISITOR_TOKEN_TTL_SECONDS = 12 * 60 * 60;
 
+function configuredLimit(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
 function ipRateLimitKey(req) {
-  return req.ip || req.socket.remoteAddress || 'unknown';
+  return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
 function invalidOtpResponse(res) {
@@ -30,7 +35,7 @@ async function register(req, res) {
   const ipAllowed = await isWithinRateLimit(
     'otp-register-ip',
     ipRateLimitKey(req),
-    20,
+    configuredLimit('OTP_REGISTER_IP_MAX', 3000),
     REGISTRATION_WINDOW_MS
   ).catch((error) => {
     console.error('OTP registration rate limit failed:', error.message);
@@ -123,11 +128,11 @@ async function register(req, res) {
 
     const verificationResult = await client.query(
       `
-      INSERT INTO otp_verifications (visitor_id, otp_hash, expires_at)
-      VALUES ($1, $2, CURRENT_TIMESTAMP + ($3 * INTERVAL '1 second'))
+      INSERT INTO otp_verifications (visitor_id, otp_hash, expires_at, pending_name)
+      VALUES ($1, $2, CURRENT_TIMESTAMP + ($3 * INTERVAL '1 second'), $4)
       RETURNING id
       `,
-      [visitorId, hashOtp(visitorId, otp), OTP_TTL_SECONDS]
+      [visitorId, hashOtp(visitorId, otp), OTP_TTL_SECONDS, name]
     );
     verificationId = verificationResult.rows[0].id;
 
@@ -150,7 +155,7 @@ async function register(req, res) {
     await pool.query(
       'UPDATE otp_verifications SET expires_at = CURRENT_TIMESTAMP WHERE id = $1',
       [verificationId]
-    );
+    ).catch(() => { console.error('Unable to expire failed SMS verification'); });
     console.error('SMS delivery failed:', error.message);
     return res.status(503).json({
       success: false,
@@ -170,7 +175,7 @@ async function verifyOtp(req, res) {
   const ipAllowed = await isWithinRateLimit(
     'otp-verify-ip',
     ipRateLimitKey(req),
-    60,
+    configuredLimit('OTP_VERIFY_IP_MAX', 6000),
     REGISTRATION_WINDOW_MS
   ).catch((error) => {
     console.error('OTP verification rate limit failed:', error.message);
@@ -218,8 +223,8 @@ async function verifyOtp(req, res) {
     const visitorId = visitorResult.rows[0].id;
     const verificationResult = await client.query(
       `
-      SELECT id, otp_hash, expires_at, verified_at, attempts,
-             expires_at <= CURRENT_TIMESTAMP AS expired
+      SELECT id, otp_hash, expires_at, verified_at, attempts, pending_name,
+             expires_at <= clock_timestamp() AS expired
       FROM otp_verifications
       WHERE visitor_id = $1
       ORDER BY created_at DESC, id DESC
@@ -271,8 +276,8 @@ async function verifyOtp(req, res) {
       [verification.id]
     );
     await client.query(
-      'UPDATE visitors SET phone_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [visitorId]
+      'UPDATE visitors SET phone_verified = TRUE, name = COALESCE($2, name), updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [visitorId, verification.pending_name]
     );
     await client.query('COMMIT');
   } catch (error) {

@@ -16,7 +16,7 @@ async function hashPassword(password) {
 }
 
 async function verifyPassword(password, storedHash) {
-  if (typeof password !== 'string' || typeof storedHash !== 'string') {
+  if (typeof password !== 'string' || password.length > 128 || typeof storedHash !== 'string') {
     return false;
   }
 
@@ -26,8 +26,8 @@ async function verifyPassword(password, storedHash) {
     !saltHex ||
     !keyHex ||
     extra !== undefined ||
-    !/^[0-9a-f]+$/i.test(saltHex) ||
-    !/^[0-9a-f]+$/i.test(keyHex)
+    !/^[0-9a-f]{32}$/i.test(saltHex) ||
+    !/^[0-9a-f]{128}$/i.test(keyHex)
   ) {
     return false;
   }
