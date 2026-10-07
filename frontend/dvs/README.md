@@ -72,7 +72,7 @@ Secrets are encrypted with AES-256-GCM before database storage. Keep the key in 
 
 Real visitor names and verified phones remain in PostgreSQL, linked to votes. The browser stores its short-lived bearer token in session storage. OTP/password hashes, shared rate limits, unique phone numbers, and one-vote-per-category constraints are enforced by the backend. Configure restricted database access, transport encryption, backups, and the event's outreach consent/retention policy for deployment.
 
-The existing PostGIS flow requires an organizer anchor and at least three trusted samples before GPS-only access is ready. Verified visitors on the approved network submit samples through the location API. Approved network access or an enabled, ready location zone authorizes voting. Browser coordinates are not device-attested.
+One authenticated admin capture makes the PostGIS venue zone ready immediately, within 100 metres of the recorded position. Visitor samples are not required and cannot change the zone. Approved network access or an enabled, ready location zone authorizes voting. Browser coordinates are not device-attested.
 
 ### Test recording the venue location
 
@@ -80,11 +80,11 @@ Open `http://localhost:8443/admin` directly on your computer. Location requires 
 
 Enable location verification in Voting settings, then select **Record venue location** and allow the browser's location request. In Zen, search its browser settings for Location and review the site's permission. Zen uses Firefox's codebase; [Firefox's location permission guide](https://support.mozilla.org/en-US/kb/does-firefox-share-my-location-websites) describes the permission controls. A device location still needs to be available after permission is granted.
 
-The interface distinguishes blocked permission, unavailable positioning, a 30-second timeout, and accuracy worse than the required 100 meters. Success records the organizer anchor immediately. The status remains **Waiting for location samples** until at least three trusted samples form a cluster around that anchor. Each event accepts one organizer anchor; use a separate test event for simulated coordinates.
+The interface distinguishes blocked permission, unavailable positioning, a 30-second timeout, and accuracy worse than the required 100 meters. A successful admin capture immediately shows **Ready** and enables location verification within 100 metres of that position. No visitor samples are needed. Existing admin anchors become ready when the migration runs. Each event accepts one organizer anchor; use a separate test event for simulated coordinates.
 
-Scanning the visitor QR only opens the page. During the open voting window, visitors tap **Start voting**, then **Allow location**. When location verification is enabled, this step also appears on the approved venue network and for returning visitor sessions. GPS accuracy must be 100 metres or better. After SMS verification, the frontend automatically submits the location to the trusted-sample endpoint. The server requires the approved network, a verified phone, and an existing organizer anchor; it accepts one sample per visitor per event. The organizer anchor plus two nearby visitors can supply the three required samples. Reload the admin settings to see updated readiness.
+Scanning the visitor QR only opens the page. During the open voting window, visitors tap **Start voting**, then **Allow location**. When location verification is enabled, this step also appears on the approved venue network and for returning visitor sessions. GPS accuracy must be 100 metres or better. Coordinates are cached for that event and sent for venue checks and voting; the frontend does not submit visitor samples to establish the venue.
 
-Visitors whose network check passes can continue using venue Wi-Fi if location is blocked or unavailable. This does not contribute a sample. GPS-only visitors remain blocked until the organizer has established a ready zone. HTTP QR links display an HTTPS warning; use the deployed HTTPS link on phones.
+Visitors whose network check passes can continue using venue Wi-Fi if location is blocked or unavailable. GPS-only visitors can proceed as soon as the admin records the venue location. HTTP QR links display an HTTPS warning; use the deployed HTTPS link on phones.
 
 ## Validation and code
 

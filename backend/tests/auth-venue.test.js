@@ -69,7 +69,7 @@ test('venue matching handles mapped IPv4, IPv6 and rejects malformed or global r
   assert.throws(() => ipIsAllowed('192.0.2.4', '::ffff:0:0/96'));
 });
 
-test('venue policy permits configured network while GPS learns and rejects unconfigured or outside requests', async () => {
+test('venue policy permits configured network before the admin records GPS and rejects unconfigured or outside requests', async () => {
   const settings = { allowed_ip_ranges: '192.0.2.0/24', location_enabled: true, location_ready: false };
   assert.equal((await venue(settings, null, '192.0.2.4')).allowed, true);
   assert.equal((await venue(settings)).code, 'OUTSIDE_VENUE');
@@ -93,7 +93,7 @@ test('GPS access requires a ready zone, valid coordinates and sufficient accurac
   assert.equal((await venue(settings, location, null, { query: async () => ({ rows: [{ inside: false }] }) })).code, 'OUTSIDE_VENUE');
 });
 
-test('GPS during setup explains that trusted network samples are needed and cannot authorize access', async () => {
+test('GPS during setup requires the admin to record the venue and cannot authorize access', async () => {
   const location = { latitude: 31.95, longitude: 35.91, accuracy: 15 };
   for (const allowed_ip_ranges of [null, '192.0.2.0/24']) {
     const settings = { allowed_ip_ranges, location_enabled: true, location_ready: false };
@@ -101,6 +101,7 @@ test('GPS during setup explains that trusted network samples are needed and cann
     assert.equal(result.allowed, false);
     assert.equal(result.code, 'LOCATION_NOT_READY');
     assert.equal(result.status, 503);
+    assert.match(result.message, /admin must record the venue location/);
   }
   assert.equal((await venue({ allowed_ip_ranges: '192.0.2.0/24', location_enabled: true, location_ready: false }, location, '192.0.2.4')).method, 'network');
 });

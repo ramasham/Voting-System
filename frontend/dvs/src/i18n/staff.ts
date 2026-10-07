@@ -89,13 +89,13 @@ export const staffCopy = {
     ipHint: "أدخل نطاقات CIDR مفصولة بفاصلة. مثال: 192.168.1.0/24",
     locationEnabled: "تفعيل التحقّق من الموقع",
     ready: "جاهز",
-    learning: "بانتظار عينات الموقع",
+    learning: "بانتظار تسجيل موقع المعرض",
     captureAnchor: "تسجيل موقع المعرض",
     locating: "جارٍ تحديد الموقع…",
     anchorSaved:
-      "تم تسجيل موقع المعرض. يحتاج اعتماد الموقع إلى ثلاث عينات موثوقة على الأقل.",
+      "تم تسجيل موقع المعرض واعتماده فورًا. التحقق من الموقع جاهز.",
     anchorHint:
-      "سجّل موقع المعرض بدقّة 100 متر أو أفضل. ثم اطلب من زائرَين مختلفَين على شبكة المعرض مسح الرمز، والضغط على ابدأ التصويت، والسماح بالموقع، والتحقق من رقم الهاتف. تشمل العينات الثلاث موقع المنظّم.",
+      "سجّل موقع المعرض من حساب المسؤول بدقّة 100 متر أو أفضل. يُعتمد الموقع فورًا، ويُسمح بالتصويت ضمن 100 متر منه، دون الحاجة إلى عينات من الزوّار.",
     shareVoting: "رابط التصويت ورمز QR",
     shareVotingBody:
       "شارك الرابط أو اطبع رمز QR ليتمكّن الزوّار من فتح صفحة التصويت على هواتفهم.",
@@ -288,13 +288,13 @@ export const staffCopy = {
     ipHint: "Enter comma-separated CIDR ranges. For example: 192.168.1.0/24",
     locationEnabled: "Enable location verification",
     ready: "Ready",
-    learning: "Waiting for location samples",
+    learning: "Waiting for the venue location",
     captureAnchor: "Record venue location",
     locating: "Finding your location…",
     anchorSaved:
-      "Venue location recorded. At least three trusted samples are needed before location access is ready.",
+      "Venue location recorded and approved immediately. Location verification is ready.",
     anchorHint:
-      "Record the venue with accuracy of 100 metres or better. Then have two different visitors on the exhibition Wi-Fi scan the QR, tap Start voting, allow location, and verify their phone numbers. The three samples include the organizer's position.",
+      "Record the venue from your admin account with accuracy of 100 metres or better. It is approved immediately and allows voting within 100 metres, without visitor samples.",
     shareVoting: "Voting link and QR code",
     shareVotingBody:
       "Share the link or print the QR code so visitors can open the voting page on their phones.",

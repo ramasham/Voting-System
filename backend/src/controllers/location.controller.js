@@ -35,7 +35,8 @@ async function getLocationStatus(req, res) {
       success: true,
       data: {
         ...result.rows[0],
-        minimum_samples: locationVerification.MIN_CLUSTER_SAMPLES,
+        minimum_samples: locationVerification.MIN_LOCATION_SAMPLES,
+        radius_meters: locationVerification.VENUE_RADIUS_METERS,
       },
     });
   } catch (error) {
@@ -102,7 +103,8 @@ async function captureOrganizerAnchor(req, res) {
         anchorCaptured: true,
         locationReady: zone.location_ready,
         trustedSampleCount: zone.location_sample_count,
-        minimumSamples: locationVerification.MIN_CLUSTER_SAMPLES,
+        minimumSamples: locationVerification.MIN_LOCATION_SAMPLES,
+        radiusMeters: locationVerification.VENUE_RADIUS_METERS,
       },
     });
   } catch (error) {
@@ -226,7 +228,8 @@ async function captureTrustedNetworkSample(req, res) {
         sampleAccepted: true,
         locationReady: zone.location_ready,
         trustedSampleCount: zone.location_sample_count,
-        minimumSamples: locationVerification.MIN_CLUSTER_SAMPLES,
+        minimumSamples: locationVerification.MIN_LOCATION_SAMPLES,
+        radiusMeters: locationVerification.VENUE_RADIUS_METERS,
       },
     });
   } catch (error) {

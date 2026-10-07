@@ -25,15 +25,15 @@ Paths below are relative to `/api`.
 | `GET /auth/me` | Visitor token; returns that verified visitor's `{ id, name }` |
 | `GET /events/:eventId/votes` | Visitor token; returns only that visitor's votes |
 | `POST /events/:eventId/votes` | Visitor token; `{ categoryId, exhibitorId, location? }`; checks venue and voting window |
-| `GET /events/:eventId/location` | Location policy/readiness |
-| `POST /events/:eventId/location/samples` | Verified visitor token and approved network; `{ latitude, longitude, accuracy }` |
+| `GET /events/:eventId/location` | Location policy/readiness; `minimum_samples: 1`, `radius_meters: 100` |
+| `POST /events/:eventId/location/samples` | Optional legacy samples; verified visitor token and approved network; `{ latitude, longitude, accuracy }`; cannot change the admin zone |
 | `GET /media/exhibitors/:exhibitorId/photo` | Stored photo bytes |
 
 The catalog adapter combines categories and exhibitors. A multi-category exhibitor appears in each assigned category. There are three categories with no fixed exhibitor count. Real names/descriptions come from PostgreSQL; sample team member names belong only to the demo catalog.
 
 Identical vote retries return the existing vote without increasing counts. Changing an already-cast category vote is rejected with `DUPLICATE_VOTE`; the adapter reloads the visitor's votes. Other errors include `INVALID_OR_EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, `INVALID_TOKEN`, `VOTING_CLOSED`, `OUTSIDE_VENUE`, `LOCATION_REQUIRED`, `LOCATION_INACCURATE`, `LOCATION_NOT_READY`, and `RATE_LIMITED`. `LOCATION_NOT_READY` means GPS-only access is blocked while the venue zone is being established; approved network access remains available.
 
-When location verification is enabled, the frontend requests location after **Start voting**, including after a successful network check. Coordinates are cached for the selected event. After SMS verification, or after a returning verified visitor allows location, the adapter automatically submits a sample from the approved network. Sample rejection does not block approved network voting. The backend requires an organizer anchor, accuracy of 100 metres or better, and one sample per verified visitor per event.
+When location verification is enabled, the frontend requests location after **Start voting**, including after a successful network check. Coordinates are cached for the selected event and sent for venue checks and votes. The frontend does not submit visitor samples. One authenticated admin capture with accuracy of 100 metres or better immediately creates the approved 100-metre venue zone. The legacy sample endpoint retains its verified-phone, approved-network, accuracy and one-sample-per-visitor checks, but visitor positions cannot change the zone.
 
 ## Staff endpoints
 
@@ -85,6 +85,6 @@ PostgreSQL notifications publish `RESULTS_UPDATED` with an `eventId`; the client
 
 Unique verified phones identify visitors. Unique `(event_id, visitor_id, category_id)` votes prevent duplicates, including concurrency. Votes reference valid category assignments. Names/phones stay linked to votes in PostgreSQL and are excluded from standings and counts exports. OTPs use secret-backed hashes, passwords salted scrypt, and rate limits shared PostgreSQL storage.
 
-Every vote checks schedule, enabled state, and venue access. Approved CIDRs or an enabled, ready PostGIS zone permit access; requests outside both are rejected. Explicitly trust only the reverse proxy's IP/CIDR for forwarded addresses. GPS readiness needs an organizer anchor and at least three trusted samples. Browser coordinates are not device-attested.
+Every vote checks schedule, enabled state, and venue access. Approved CIDRs or an enabled, ready PostGIS zone permit access; requests outside both are rejected. Explicitly trust only the reverse proxy's IP/CIDR for forwarded addresses. GPS readiness requires only the authenticated admin's recorded venue location, with a fixed 100-metre radius. Browser coordinates are not device-attested.
 
 Apply all migrations before starting this API. PostGIS must be available even for IP-only access because geometry columns are part of the schema. See [setup instructions](../README.md) for environment, SMS, MFA, and deployment details.

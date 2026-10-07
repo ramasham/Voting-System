@@ -138,36 +138,6 @@ export function createHttpApi(): Api {
     return stored
   }
   let networkVerified = false
-  const submittedSamples = new Set<string>()
-  const sampleRequests = new Map<string, Promise<void>>()
-  const captureSample = (token: string, stored: SavedLocation): Promise<void> => {
-    if (
-      !networkVerified ||
-      Date.now() - stored.at >= 300000 ||
-      submittedSamples.has(token)
-    )
-      return Promise.resolve()
-    const pending = sampleRequests.get(token)
-    if (pending) return pending
-    // The server accepts only verified visitors on the approved network, with an organizer anchor.
-    // Sampling is optional for network voting; transient failures can retry on the next vote.
-    const request = backendRequest(`/events/${stored.event}/location/samples`, {
-      token,
-      method: "POST",
-      body: stored.coordinates,
-    })
-      .then(() => { submittedSamples.add(token) })
-      .catch((error: unknown) => {
-        if (
-          error instanceof BackendError &&
-          error.code === "LOCATION_SAMPLE_ALREADY_SUBMITTED"
-        )
-          submittedSamples.add(token)
-      })
-      .finally(() => { sampleRequests.delete(token) })
-    sampleRequests.set(token, request)
-    return request
-  }
   return {
     mode: "http",
     getConfig: async () => call<AppConfig>(`/events/${await eventId()}/config`),
@@ -188,9 +158,7 @@ export function createHttpApi(): Api {
         { method: "POST", body: { location: input } },
         "OFF_SITE_LOCATION",
       )
-      const stored = await rememberLocation(input)
-      const auth = readAuth()
-      if (auth) void captureSample(auth.accessToken, stored)
+      await rememberLocation(input)
     },
     sendOtp: async (input) => {
       await call("/auth/register", {
@@ -214,10 +182,7 @@ export function createHttpApi(): Api {
           expiresAt: Date.now() + result.expiresInSeconds * 1000,
         }),
       )
-      const session = await restore(result.accessToken)
-      const stored = await savedLocation()
-      if (stored) void captureSample(result.accessToken, stored)
-      return session
+      return restore(result.accessToken)
     },
     getMe: async () => {
       const auth = readAuth()
@@ -264,7 +229,7 @@ export function createHttpApi(): Api {
       const auth = readAuth()
       if (!auth) throw new ApiError("SESSION_EXPIRED")
       let location: Coordinates | undefined
-      let stored = await savedLocation()
+      const stored = await savedLocation()
       try {
         if (stored) {
           if (Date.now() - stored.at < 60000) location = stored.coordinates
@@ -282,9 +247,8 @@ export function createHttpApi(): Api {
               ),
             )
             if (location.accuracy > 100) throw new ApiError("LOCATION_INACCURATE")
-            stored = await rememberLocation(location)
+            await rememberLocation(location)
           }
-          void captureSample(auth.accessToken, stored)
         }
       } catch (error) {
         if (!networkVerified) {

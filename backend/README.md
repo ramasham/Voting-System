@@ -99,7 +99,7 @@ Admin APIs require an admin bearer token. Login is `POST /api/admin/login`. Admi
 
 ## Location and voting setup
 
-Configure trusted event IP ranges and enable location through the authenticated admin event-settings API. Record the organizer anchor through `POST /api/admin/events/:eventId/location/anchor`, then collect trusted samples through the visitor location-samples API. Samples require a verified visitor on a configured trusted network. The geofence becomes ready when the required cluster has at least three samples, including the organizer anchor. Use the real event coordinates and network ranges for the event; local test coordinates are not production configuration.
+Configure venue access through the authenticated admin event-settings API. Record the venue location through `POST /api/admin/events/:eventId/location/anchor` with accuracy of 100 metres or better. That single admin capture immediately enables location verification and creates a ready PostGIS zone within 100 metres of the recorded position; visitor samples are not required and cannot move or expand this zone. Approved network ranges remain an optional alternative to GPS. The location status reports `minimum_samples: 1` and `radius_meters: 100`. Existing admin anchors are upgraded by the admin-location-ready migration without another capture. Use the real event coordinates and network ranges for the event; local test coordinates are not production configuration.
 
 Voting must have a valid start/end window, three populated categories, and a usable venue policy before it can be opened through `POST /api/admin/events/:eventId/voting/open`. Vote acceptance checks the visitor token, verified phone, window, venue, category, assignment, and rate limit. PostgreSQL enforces one vote per visitor per category and event.
 
@@ -110,6 +110,8 @@ Connect to `ws(s)://<host>/ws`. Send `AUTH` with a visitor token before `CAST_VO
 Each process keeps its WebSocket connections and subscription membership in memory. Every backend instance listens to PostgreSQL's `voting_results` notification channel, which fans committed vote notifications out to that instance's local sockets. If a deployment changes that per-instance listener arrangement, it will need a shared pub/sub mechanism for cross-instance notifications.
 
 ## Health and local load checks
+
+Run `npm test` for the backend checks. With a PostGIS database configured in `.env`, run `RUN_POSTGIS_TESTS=1 npm run test:integration` to verify immediate admin location readiness, the fixed venue boundary, and migration upgrades/rollbacks. The integration test writes only to temporary tables and removes them when finished.
 
 - `GET /health` checks that the HTTP process responds.
 - `GET /ready` also checks PostgreSQL connectivity.
