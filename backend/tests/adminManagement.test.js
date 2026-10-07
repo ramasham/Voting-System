@@ -221,7 +221,7 @@ test('uploaded photos are served with safe image headers and conditional caching
 
 test('CSV export includes zero-vote entrants and neutralizes spreadsheet formulas', async (t) => {
   database(t, [
-    { match: /SELECT id, name FROM events/, rows: [{ id: 1, name: 'Awards' }] },
+    { match: /SELECT id, name,/, rows: [{ id: 1, name: 'Awards', total_votes: 0, total_visitors: 0 }] },
     { match: /SELECT c.id AS category_id/, rows: [
       { category_id: 1, category_name: '=1+1', exhibitor_id: 2, exhibitor_name: 'Maker, "A"', vote_count: 0 },
       { category_id: 2, category_name: 'Empty', exhibitor_id: null, exhibitor_name: null, vote_count: 0 },

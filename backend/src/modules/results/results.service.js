@@ -1,7 +1,13 @@
 const pool = require('../../../db/connection');
 
 async function getResults(eventId) {
-    const event = await pool.query('SELECT id, name FROM events WHERE id = $1', [eventId]);
+    const event = await pool.query(
+        `SELECT id, name,
+                (SELECT COUNT(*)::integer FROM votes WHERE event_id = events.id) AS total_votes,
+                (SELECT COUNT(DISTINCT visitor_id)::integer FROM votes WHERE event_id = events.id) AS total_visitors
+         FROM events WHERE id = $1`,
+        [eventId]
+    );
     if (event.rowCount === 0) return null;
 
     const result = await pool.query(
@@ -25,21 +31,26 @@ async function getResults(eventId) {
             categories.set(row.category_id, {
                 categoryId: row.category_id,
                 category: row.category_name,
+                totalVotes: 0,
                 exhibitors: [],
             });
         }
         if (row.exhibitor_id !== null) {
-            categories.get(row.category_id).exhibitors.push({
+            const category = categories.get(row.category_id);
+            category.exhibitors.push({
                 exhibitorId: row.exhibitor_id,
                 exhibitor: row.exhibitor_name,
                 imageUrl: row.image_url,
                 votes: row.vote_count,
             });
+            category.totalVotes += row.vote_count;
         }
     }
     return {
         eventId: event.rows[0].id,
         event: event.rows[0].name,
+        totalVotes: event.rows[0].total_votes ?? 0,
+        totalVisitors: event.rows[0].total_visitors ?? 0,
         categories: [...categories.values()],
         updatedAt: new Date().toISOString(),
     };

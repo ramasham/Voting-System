@@ -117,7 +117,7 @@ test('prior-vote reads are scoped to authenticated visitor and omit visitor pers
 test('results include empty categories and zero-vote exhibitors in database rank order', async (t) => {
     t.mock.method(pool, 'query', async (sql, params) => {
         assert.deepEqual(params, [1]);
-        if (sql.includes('FROM events')) return rows([{ id: 1, name: 'MC2026' }]);
+        if (sql.includes('FROM events')) return rows([{ id: 1, name: 'MC2026', total_votes: 8, total_visitors: 5 }]);
         assert.match(sql, /COUNT\(v.id\) DESC/);
         return rows([
             { category_id: 2, category_name: 'Design', exhibitor_id: 3, exhibitor_name: 'A', image_url: '/a.png', vote_count: 8 },
@@ -127,7 +127,10 @@ test('results include empty categories and zero-vote exhibitors in database rank
     });
     const data = await getResults(1);
     assert.deepEqual(data.categories[0].exhibitors.map((entry) => entry.votes), [8, 0]);
+    assert.equal(data.categories[0].totalVotes, 8);
     assert.deepEqual(data.categories[1].exhibitors, []);
     assert.equal(data.event, 'MC2026');
+    assert.equal(data.totalVotes, 8);
+    assert.equal(data.totalVisitors, 5);
     assert.ok(!JSON.stringify(data).includes('phone_number'));
 });

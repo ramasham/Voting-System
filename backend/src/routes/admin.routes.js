@@ -6,12 +6,13 @@ const adminContentController = require('../controllers/adminContent.controller')
 const adminEventsController = require('../controllers/adminEvents.controller');
 const locationController = require('../controllers/location.controller');
 const mediaController = require('../controllers/media.controller');
+const auditAdminMutation = require('../middleware/auditAdminMutation.middleware');
 
 const router = express.Router();
 
 router.post('/login', adminAuthController.login);
 
-router.use(authenticate('admin'), adminApiRateLimit);
+router.use(authenticate('admin'), adminApiRateLimit, auditAdminMutation);
 
 router.get('/events/:eventId/settings', adminEventsController.getSettings);
 router.patch('/events/:eventId/settings', adminEventsController.updateSettings);

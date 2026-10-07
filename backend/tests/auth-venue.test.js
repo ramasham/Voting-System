@@ -15,7 +15,7 @@ require.cache[connectionPath] = { id: connectionPath, filename: connectionPath, 
 const { normalizePhoneNumber, normalizeAllowedIpRanges, parseOptionalDate, ipIsAllowed } = require('../src/utils/validation');
 const { parseCoordinates, checkVenueAccess } = require('../src/services/locationVerification');
 const { issueToken, verifyToken } = require('../src/services/tokens');
-const { hashOtp, otpMatches } = require('../src/services/otp');
+const { OTP_TTL_SECONDS, MAX_ATTEMPTS, hashOtp, otpMatches } = require('../src/services/otp');
 const { hashPassword, verifyPassword } = require('../src/services/passwords');
 const { getSmsProvider } = require('../src/services/smsProvider');
 const { createRateLimiter } = require('../src/middleware/rateLimit.middleware');
@@ -107,6 +107,8 @@ test('tokens enforce role separation, integrity and expiry', () => {
 });
 
 test('OTP digests are bound to the visitor and tolerate malformed hashes safely', () => {
+  assert.equal(OTP_TTL_SECONDS, 60);
+  assert.equal(MAX_ATTEMPTS, 3);
   const hash = hashOtp(1, '123456');
   assert.equal(otpMatches(1, '123456', hash), true);
   assert.equal(otpMatches(2, '123456', hash), false);
