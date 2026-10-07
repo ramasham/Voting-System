@@ -3,6 +3,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 const http = require('node:http');
 const app = require('./app');
 const { attachWebSocketServer } = require('./services/webSocketServer');
+const { checkSmsOnStartup } = require('./services/smsDiagnostics');
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
@@ -44,6 +45,7 @@ server.on('error', handleServerError);
 sockets.on('error', handleServerError);
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    void checkSmsOnStartup();
 });
 
 module.exports = server;

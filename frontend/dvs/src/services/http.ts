@@ -31,6 +31,7 @@ function convertError(
   if (!(error instanceof BackendError)) return new ApiError("SERVER")
   const mapped: Record<string, ApiErrorCode> = {
     NETWORK: "NETWORK",
+    SMS_UNAVAILABLE: "SMS_UNAVAILABLE",
     INVALID_TOKEN: "SESSION_EXPIRED",
     AUTHENTICATION_REQUIRED: "SESSION_EXPIRED",
     INVALID_OR_EXPIRED_OTP: "OTP_INVALID",

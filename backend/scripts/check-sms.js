@@ -1,6 +1,6 @@
 const path = require('node:path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
-const { getSmsProvider } = require('../src/services/smsProvider');
+const { getSmsProvider, describeSmsFailure } = require('../src/services/smsProvider');
 
 async function main() {
   const provider = getSmsProvider();
@@ -26,6 +26,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`SMS check failed: ${error.message}`);
+  console.error(`SMS check failed: ${describeSmsFailure(error)}`);
   process.exitCode = 1;
 });

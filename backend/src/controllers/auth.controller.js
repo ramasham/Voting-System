@@ -8,7 +8,7 @@ const {
   hashOtp,
   otpMatches,
 } = require('../services/otp');
-const { getSmsProvider } = require('../services/smsProvider');
+const { getSmsProvider, describeSmsFailure } = require('../services/smsProvider');
 const { issueToken } = require('../services/tokens');
 const { recordAuditEvent } = require('../services/auditLog.service');
 
@@ -158,7 +158,7 @@ async function register(req, res) {
       'UPDATE otp_verifications SET expires_at = CURRENT_TIMESTAMP WHERE id = $1',
       [verificationId]
     ).catch(() => { console.error('Unable to expire failed SMS verification'); });
-    console.error('SMS delivery failed');
+    console.error(`SMS delivery failed: ${describeSmsFailure(error)}`);
     await recordAuditEvent('OTP_DELIVERY_FAILED');
     return res.status(503).json({
       success: false,

@@ -40,6 +40,8 @@ node --env-file=.env.deploy scripts/check-sms.js
 
 This verifies authenticated device registration. It does not prove that the phone is currently online or that a recipient received an SMS. Test one registration with a phone you control after deployment. For multiple SMS phones, optionally set `SMSGATE_DEVICE_ID` to select one; otherwise SMSGate chooses a device. Optional `SMSGATE_SIM_NUMBER` selects the SIM slot.
 
+The deployed server also runs this read-only SMSGate check after startup. In Render's **Logs**, look for `SMS startup check` or `SMS delivery failed`. An HTTP 401 means the gateway rejected authentication; check the Cloud Server credentials saved in Render and deploy the environment changes. Missing devices and connection failures have separate messages. These logs omit phone numbers, OTPs, credentials, and raw provider responses. A successful startup check confirms authenticated registration only; check the SMSGate app's message status when delivery still fails.
+
 ## 3. Deploy the repository on Render
 
 Select the `deployment/phone-qr` branch in Render. It contains `render.yaml` and the deployment changes. Do not upload `.env`, `.env.deploy`, or `.admin-credentials` to GitHub.

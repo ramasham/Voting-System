@@ -249,14 +249,21 @@ test('an incorrect OTP increments attempts without verifying the phone', async (
   assert.equal(writes.length, 0);
 });
 
-test('SMS failure expires the pending code and returns no token or OTP', async (t) => {
+test('SMS failure expires the pending code and logs safe provider status without returning private details', async (t) => {
   setEnv(t, 'SMS_PROVIDER', 'smsgate');
+  setEnv(t, 'SMSGATE_MODE', 'local');
+  setEnv(t, 'SMSGATE_DEVICE_ID', '');
   setEnv(t, 'SMSGATE_BASE_URL', 'http://192.168.1.50:8080');
   setEnv(t, 'SMSGATE_USERNAME', 'test-user');
   setEnv(t, 'SMSGATE_PASSWORD', 'test-password');
   setEnv(t, 'SMSGATE_SIM_NUMBER', '');
-  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 503 }));
-  t.mock.method(console, 'error', () => {});
+  let providerStatus;
+  const logs = [];
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: false, status: providerStatus,
+    json: async () => { throw new Error('Must not read private provider details'); },
+  }));
+  t.mock.method(console, 'error', (...args) => logs.push(args.join(' ')));
   let expired = false;
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('UPDATE otp_verifications')) expired = true;
@@ -266,11 +273,17 @@ test('SMS failure expires the pending code and returns no token or OTP', async (
     query: async (sql) => ({ rows: sql.includes('INSERT INTO visitors') ? [{ id: 7 }] : sql.includes('INSERT INTO otp_verifications') ? [{ id: 3 }] : [] }),
     release() {},
   }));
-  const res = response();
-  await register({ ip: '192.0.2.1', body: { name: 'Owner', phoneNumber: '0791234567' } }, res);
-  assert.equal(res.statusCode, 503);
-  assert.equal(res.body.code, 'SMS_UNAVAILABLE');
-  assert.equal(expired, true);
-  assert.equal(res.body.otp, undefined);
-  assert.equal(res.body.accessToken, undefined);
+  for (providerStatus of [401, 403, 429, 503]) {
+    expired = false;
+    const res = response();
+    await register({ ip: '192.0.2.1', body: { name: 'Owner', phoneNumber: '0791234567' } }, res);
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.body.code, 'SMS_UNAVAILABLE');
+    assert.equal(expired, true);
+    assert.equal(res.body.otp, undefined);
+    assert.equal(res.body.accessToken, undefined);
+    assert.ok(logs.includes(`SMS delivery failed: SMSGate rejected the request (HTTP ${providerStatus})`));
+    assert.doesNotMatch(JSON.stringify(res.body), /HTTP|test-user|test-password|0791234567|962791234567/);
+  }
+  assert.doesNotMatch(logs.join('\n'), /test-user|test-password|0791234567|962791234567/);
 });

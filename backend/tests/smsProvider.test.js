@@ -158,9 +158,9 @@ test('SMSGate rejects failed, cancelled, malformed, and unknown acceptance respo
 test('SMSGate sanitizes connection and timeout errors', async (t) => {
   configure(t);
   t.mock.method(globalThis, 'fetch', async () => { throw new Error('private recipient and credentials'); });
-  await assert.rejects(getSmsProvider().sendOtp('+962791234567', '123456'), /^Error: Unable to reach SMSGate\./);
+  await assert.rejects(getSmsProvider().sendOtp('+962791234567', '123456'), /^Error: Unable to reach the SMSGate API\./);
   globalThis.fetch.mock.mockImplementation(async () => { throw new DOMException('private timeout details', 'TimeoutError'); });
-  await assert.rejects(getSmsProvider().checkConnection(), /^Error: Unable to reach SMSGate\./);
+  await assert.rejects(getSmsProvider().checkConnection(), /^Error: Unable to reach the SMSGate API\./);
 });
 
 test('SMSGate connection check accepts warnings and rejects unhealthy or malformed health data', async (t) => {
