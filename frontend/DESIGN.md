@@ -1,7 +1,7 @@
 # Visual Design Contract
 
 `AGENTS.md` is the canonical statement of the blank-canvas rule — check
-`app/routes/_index.tsx` and `app/global.css`, preserve any real UI/brand
+`frontend/app/routes/_index.tsx` and `frontend/app/global.css`, preserve any real UI/brand
 already there, and only treat the canvas as blank when those files still show
 the starter's placeholder. This file does not restate that rule; it records
 **this app's** visual direction. The fields below are the source of truth for
@@ -18,7 +18,7 @@ default to safe gray SaaS:
 
 - Commit to one concrete visual world (see the `frontend-design` skill and its
   `references/visual-direction.md`). Do not ship the neutral placeholder theme.
-- Choose a product-fitting accent family and set it in the `app/global.css`
+- Choose a product-fitting accent family and set it in the `frontend/app/global.css`
   tokens for **both** light and dark. Never leave the 0%-saturation default as
   the shipped palette.
 - Establish a clear type hierarchy, a consistent spacing rhythm, and one
