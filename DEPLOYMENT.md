@@ -42,6 +42,10 @@ This verifies authenticated device registration. It does not prove that the phon
 
 The deployed server also runs this read-only SMSGate check after startup. In Render's **Logs**, look for `SMS startup check` or `SMS delivery failed`. An HTTP 401 means the gateway rejected authentication; check the Cloud Server credentials saved in Render and deploy the environment changes. Missing devices and connection failures have separate messages. These logs omit phone numbers, OTPs, credentials, and raw provider responses. A successful startup check confirms authenticated registration only; check the SMSGate app's message status when delivery still fails.
 
+For each accepted cloud OTP request, the backend logs `SMS submission accepted`, then checks the existing message's delivery status after approximately 15 and 45 seconds. Look for `SMS delivery status` in Render's logs. `Pending` means the device has not processed it, `Sent` means the mobile network accepted it, and `Delivered` confirms recipient receipt. A `Failed` message includes a fixed diagnostic category such as `SMS_PERMISSION_DENIED` or `NO_DEFAULT_SMS_APP_OR_SIM`; unrecognized errors require checking the SMSGate dashboard. These checks never send another SMS or extend the 60-second OTP lifetime, and stop early on a terminal result. `/ready` also returns an `X-App-Revision` header with Render's deployed commit SHA so releases can be verified.
+
+Startup also logs `SMS latest message status` by reading one recent outgoing message from the cloud account (filtered by `SMSGATE_DEVICE_ID` when configured). This is account history, not proof of a particular visitor's request. Empty history is reported explicitly. Only the state and a fixed failure category are logged; message content, message/device IDs, and recipient information are omitted.
+
 ## 3. Deploy the repository on Render
 
 Select the `deployment/phone-qr` branch in Render. It contains `render.yaml` and the deployment changes. Do not upload `.env`, `.env.deploy`, or `.admin-credentials` to GitHub.

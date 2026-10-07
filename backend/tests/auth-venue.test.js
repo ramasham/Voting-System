@@ -18,6 +18,7 @@ const { issueToken, verifyToken } = require('../src/services/tokens');
 const { OTP_TTL_SECONDS, MAX_ATTEMPTS, hashOtp, otpMatches } = require('../src/services/otp');
 const { hashPassword, verifyPassword } = require('../src/services/passwords');
 const { getSmsProvider } = require('../src/services/smsProvider');
+const { stopSmsDeliveryChecks } = require('../src/services/smsDiagnostics');
 const { createRateLimiter } = require('../src/middleware/rateLimit.middleware');
 const { verifyOtp, register } = require('../src/controllers/auth.controller');
 
@@ -286,4 +287,58 @@ test('SMS failure expires the pending code and logs safe provider status without
     assert.doesNotMatch(JSON.stringify(res.body), /HTTP|test-user|test-password|0791234567|962791234567/);
   }
   assert.doesNotMatch(logs.join('\n'), /test-user|test-password|0791234567|962791234567/);
+});
+
+test('accepted registration responds before delivery checks and keeps the OTP lifetime when a status lookup fails', async t => {
+  const { setImmediate: flush } = require('node:timers/promises');
+  for (const [key, value] of Object.entries({
+    SMS_PROVIDER: 'smsgate', SMSGATE_MODE: 'cloud',
+    SMSGATE_BASE_URL: 'https://api.sms-gate.app/3rdparty/v1',
+    SMSGATE_USERNAME: 'test-user', SMSGATE_PASSWORD: 'test-password',
+    SMSGATE_DEVICE_ID: '', SMSGATE_SIM_NUMBER: '',
+  })) setEnv(t, key, value);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.after(stopSmsDeliveryChecks);
+  const requests = [];
+  const logs = [];
+  let otp;
+  t.mock.method(console, 'info', message => logs.push(message));
+  t.mock.method(console, 'error', message => logs.push(message));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(options.method);
+    if (options.method === 'POST') {
+      assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/messages');
+      const body = JSON.parse(options.body);
+      assert.equal(body.ttl, OTP_TTL_SECONDS);
+      otp = body.textMessage.text.match(/code is (\d{6})/)[1];
+      return { ok: true, json: async () => ({ id: 'gateway-message-id', state: 'Pending' }) };
+    }
+    assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/messages/gateway-message-id');
+    return { ok: false, status: 401 };
+  });
+  let expired = false;
+  t.mock.method(pool, 'query', async sql => {
+    if (sql.includes('UPDATE otp_verifications')) expired = true;
+    return { rows: [{ hits: 1 }] };
+  });
+  t.mock.method(pool, 'connect', async () => ({
+    query: async sql => ({ rows: sql.includes('INSERT INTO visitors') ? [{ id: 7 }] : sql.includes('INSERT INTO otp_verifications') ? [{ id: 3 }] : [] }),
+    release() {},
+  }));
+  const res = response();
+  await register({ ip: '192.0.2.1', body: { name: 'Owner', phoneNumber: '0791234567' } }, res);
+  assert.equal(res.statusCode, 202);
+  assert.equal(res.body.expiresInSeconds, 60);
+  assert.equal(res.body.otp, undefined);
+  assert.equal(res.body.accessToken, undefined);
+  assert.deepEqual(requests, ['POST']);
+  assert.ok(logs.some(message => message.startsWith('SMS submission accepted (verification 3): Pending')));
+  t.mock.timers.tick(15000);
+  await flush();
+  assert.deepEqual(requests, ['POST', 'GET']);
+  assert.equal(res.statusCode, 202);
+  assert.equal(expired, false);
+  assert.ok(logs.some(message => message.includes('SMS delivery check failed (verification 3): SMSGate rejected the request (HTTP 401)')));
+  assert.doesNotMatch(logs.join('\n'), /test-user|test-password|0791234567|962791234567|gateway-message-id/);
+  assert.ok(!logs.join('\n').includes(otp));
 });

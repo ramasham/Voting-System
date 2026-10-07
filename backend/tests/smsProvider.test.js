@@ -163,6 +163,79 @@ test('SMSGate sanitizes connection and timeout errors', async (t) => {
   await assert.rejects(getSmsProvider().checkConnection(), /^Error: Unable to reach the SMSGate API\./);
 });
 
+test('cloud delivery check uses only GET and returns fixed failure categories without private response data', async t => {
+  configure(t);
+  process.env.SMSGATE_MODE = 'cloud';
+  process.env.SMSGATE_BASE_URL = 'https://api.sms-gate.app/3rdparty/v1';
+  let error;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/messages/message-id');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.body, undefined);
+    return { ok: true, json: async () => ({
+      id: 'message-id', state: 'Failed',
+      textMessage: { text: 'OTP 123456' },
+      recipients: [{ phoneNumber: '+962791234567', error }],
+    }) };
+  });
+  for (const [raw, reason] of [
+    ['Does not have android.permission.SEND_SMS', 'SMS_PERMISSION_DENIED'],
+    ['RESULT_NO_DEFAULT_SMS_APP', 'NO_DEFAULT_SMS_APP_OR_SIM'],
+    ["Can't send message: No SIMs found", 'NO_SIM_FOUND'],
+    ['RESULT_ERROR_NO_SERVICE', 'NO_MOBILE_SERVICE'],
+    ['RESULT_ERROR_RADIO_OFF', 'MOBILE_RADIO_OFF'],
+    ['RESULT_ERROR_LIMIT_EXCEEDED', 'ANDROID_OR_CARRIER_SMS_LIMIT'],
+    ['RESULT_RIL_MODEM_ERR', 'ANDROID_MODEM_ERROR'],
+    ['RESULT_ERROR_GENERIC_FAILURE', 'ANDROID_GENERIC_FAILURE'],
+    ['Message expired', 'MESSAGE_EXPIRED'],
+    ['private recipient +962791234567 OTP 123456 and test-gateway-password', 'UNKNOWN_FAILURE_CHECK_SMSGATE'],
+  ]) {
+    error = `${raw}: +962791234567 OTP 123456`;
+    const status = await getSmsProvider().getMessageStatus('message-id');
+    assert.deepEqual(status, { state: 'Failed', reason });
+    assert.doesNotMatch(JSON.stringify(status), /962791234567|123456|test-gateway-password/);
+  }
+});
+
+test('cloud delivery check validates the exact message and rejects unexpected or private states', async t => {
+  configure(t);
+  process.env.SMSGATE_MODE = 'cloud';
+  process.env.SMSGATE_BASE_URL = 'https://api.sms-gate.app/3rdparty/v1';
+  let result;
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => result }));
+  for (const state of ['Pending', 'Processed', 'Sent', 'Delivered', 'Cancelling', 'Cancelled']) {
+    result = { id: 'message-id', state, phoneNumbers: ['+962791234567'], reason: 'private 123456' };
+    assert.deepEqual(await getSmsProvider().getMessageStatus('message-id'), { state });
+  }
+  for (result of [null, {}, { id: 'another-message', state: 'Delivered' }, { id: 'message-id', state: 'private 123456' }]) {
+    await assert.rejects(getSmsProvider().getMessageStatus('message-id'), /^Error: SMSGate returned an invalid message status$/);
+  }
+  await assert.rejects(getSmsProvider().getMessageStatus(''), /cloud message identifier/);
+  process.env.SMSGATE_MODE = 'local';
+  process.env.SMSGATE_BASE_URL = 'http://192.168.1.50:8080';
+  await assert.rejects(getSmsProvider().getMessageStatus('message-id'), /cloud message identifier/);
+});
+
+test('recent cloud message check requests a bounded history and returns only sanitized delivery metadata', async t => {
+  configure(t);
+  process.env.SMSGATE_MODE = 'cloud';
+  process.env.SMSGATE_BASE_URL = 'https://api.sms-gate.app/3rdparty/v1';
+  process.env.SMSGATE_DEVICE_ID = 'private-device';
+  let messages = [{ id: 'private-message', state: 'Sent', textMessage: { text: '123456' }, recipients: [{ phoneNumber: '+962791234567' }] }];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/messages?limit=1&deviceId=private-device');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.body, undefined);
+    return { ok: true, json: async () => messages };
+  });
+  assert.deepEqual(await getSmsProvider().getLatestMessageStatus(), { state: 'Sent' });
+  messages = [];
+  assert.equal(await getSmsProvider().getLatestMessageStatus(), null);
+  for (messages of [null, {}, [{ id: 'private-message', state: 'private 123456' }]]) {
+    await assert.rejects(getSmsProvider().getLatestMessageStatus(), /invalid message (list|status)/);
+  }
+});
+
 test('SMSGate connection check accepts warnings and rejects unhealthy or malformed health data', async (t) => {
   configure(t);
   let result = { status: 'warn', checks: { privateData: '+962791234567' } };

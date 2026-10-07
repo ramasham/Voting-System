@@ -3,7 +3,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 const http = require('node:http');
 const app = require('./app');
 const { attachWebSocketServer } = require('./services/webSocketServer');
-const { checkSmsOnStartup } = require('./services/smsDiagnostics');
+const { checkSmsOnStartup, stopSmsDeliveryChecks } = require('./services/smsDiagnostics');
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
@@ -15,6 +15,7 @@ let stopping = false;
 async function shutdown() {
     if (stopping) return;
     stopping = true;
+    stopSmsDeliveryChecks();
     const deadline = setTimeout(() => process.exit(1), 10000);
     deadline.unref();
     for (const socket of sockets.clients) socket.close(1001, 'Server restarting');

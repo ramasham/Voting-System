@@ -1,4 +1,5 @@
 const { OTP_TTL_SECONDS } = require('./otp');
+const SMS_STATES = new Set(['Pending', 'Processed', 'Sent', 'Delivered', 'Failed', 'Cancelling', 'Cancelled']);
 
 // Only errors created here contain messages safe to include in hosting logs.
 class SmsProviderError extends Error {}
@@ -7,6 +8,39 @@ function describeSmsFailure(error) {
   return error instanceof SmsProviderError
     ? error.message
     : 'Unexpected SMS provider failure (private error details omitted)';
+}
+
+function deliveryFailureReason(result) {
+  const errors = [result.reason, ...(Array.isArray(result.recipients) ? result.recipients.slice(0, 10).map(recipient => recipient?.error) : [])]
+    .filter(error => typeof error === 'string')
+    .map(error => error.slice(0, 2048).toLowerCase());
+  // Return fixed categories only: a provider's free-text errors may contain OTPs or recipients.
+  const knownReasons = [
+    ['android.permission.send_sms', 'SMS_PERMISSION_DENIED'],
+    ['result_no_default_sms_app', 'NO_DEFAULT_SMS_APP_OR_SIM'],
+    ['no sims found', 'NO_SIM_FOUND'],
+    ['result_error_no_service', 'NO_MOBILE_SERVICE'],
+    ['result_error_radio_off', 'MOBILE_RADIO_OFF'],
+    ['result_error_limit_exceeded', 'ANDROID_OR_CARRIER_SMS_LIMIT'],
+    ['result_ril_modem_err', 'ANDROID_MODEM_ERROR'],
+    ['result_error_generic_failure', 'ANDROID_GENERIC_FAILURE'],
+    ['expired', 'MESSAGE_EXPIRED'],
+    ['ttl exceeded', 'MESSAGE_EXPIRED'],
+  ];
+  for (const [pattern, reason] of knownReasons) {
+    if (errors.some(error => error.includes(pattern))) return reason;
+  }
+  return 'UNKNOWN_FAILURE_CHECK_SMSGATE';
+}
+
+function messageDeliveryStatus(result) {
+  if (!result || typeof result.id !== 'string' || !result.id || !SMS_STATES.has(result.state)) {
+    throw new SmsProviderError('SMSGate returned an invalid message status');
+  }
+  return {
+    state: result.state,
+    ...(result.state === 'Failed' ? { reason: deliveryFailureReason(result) } : {}),
+  };
 }
 
 function otpMessage(otp) {
@@ -153,6 +187,26 @@ class AndroidSmsGatewayProvider {
         !['Pending', 'Processed', 'Sent', 'Delivered'].includes(result.state)) {
       throw new SmsProviderError('SMSGate did not accept the verification message');
     }
+    return { id: result.id, state: result.state };
+  }
+
+  async getMessageStatus(messageId) {
+    if (this.mode !== 'cloud' || typeof messageId !== 'string' || !messageId || messageId.length > 128) {
+      throw new SmsProviderError('A cloud message identifier is required to check SMSGate delivery');
+    }
+    const result = await this.request(`/messages/${encodeURIComponent(messageId)}`);
+    if (!result || result.id !== messageId) {
+      throw new SmsProviderError('SMSGate returned an invalid message status');
+    }
+    return messageDeliveryStatus(result);
+  }
+
+  async getLatestMessageStatus() {
+    if (this.mode !== 'cloud') throw new SmsProviderError('Cloud mode is required to check recent SMSGate messages');
+    const query = new URLSearchParams({ limit: '1', ...(this.deviceId ? { deviceId: this.deviceId } : {}) });
+    const messages = await this.request(`/messages?${query}`);
+    if (!Array.isArray(messages)) throw new SmsProviderError('SMSGate returned an invalid message list');
+    return messages.length ? messageDeliveryStatus(messages[0]) : null;
   }
 
   async checkConnection() {

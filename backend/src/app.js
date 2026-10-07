@@ -24,6 +24,8 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Cache-Control', 'no-store');
+    const revision = process.env.RENDER_GIT_COMMIT;
+    if (/^[a-f0-9]{40}$/i.test(revision || '')) res.set('X-App-Revision', revision);
     const origin = req.get('Origin');
     if (origin) res.vary('Origin');
     if (origin && corsOrigins.has(origin)) {

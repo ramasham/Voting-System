@@ -26,16 +26,37 @@ function configure(t) {
 test('startup check authenticates using only GET and omits private device information', async t => {
   const logs = configure(t);
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/devices');
     assert.equal(options.method, 'GET');
     assert.equal(options.body, undefined);
+    if (url === 'https://api.sms-gate.app/3rdparty/v1/messages?limit=1') {
+      return { ok: true, json: async () => [{ id: 'private-message-id', state: 'Failed', textMessage: { text: '123456' }, recipients: [{ phoneNumber: '+962791234567', error: 'RESULT_NO_DEFAULT_SMS_APP' }] }] };
+    }
+    assert.equal(url, 'https://api.sms-gate.app/3rdparty/v1/devices');
     return { ok: true, json: async () => [{ id: 'private-device-id', name: 'private-device-name', phoneNumber: '+962791234567' }] };
   });
   await checkSmsOnStartup();
-  assert.equal(logs.length, 1);
+  assert.equal(logs.length, 2);
   assert.match(logs[0], /authentication succeeded; 1 registered device/);
   assert.match(logs[0], /No SMS was sent.*does not confirm phone availability or delivery/);
-  assert.doesNotMatch(logs[0], /private-|962791234567/);
+  assert.match(logs[1], /SMS latest message status: Failed \(NO_DEFAULT_SMS_APP_OR_SIM\)/);
+  assert.doesNotMatch(logs.join('\n'), /private-|962791234567|123456/);
+});
+
+test('startup recent-message check reports empty history and failures separately from authentication', async t => {
+  const logs = configure(t);
+  let historyFails = false;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/devices')) return { ok: true, json: async () => [{ id: 'private-device' }] };
+    if (historyFails) return { ok: false, status: 503 };
+    return { ok: true, json: async () => [] };
+  });
+  await checkSmsOnStartup();
+  assert.match(logs[0], /authentication succeeded/);
+  assert.match(logs[1], /no outgoing messages found/);
+  historyFails = true;
+  await assert.doesNotReject(checkSmsOnStartup());
+  assert.match(logs[2], /authentication succeeded/);
+  assert.equal(logs[3], 'SMS latest message check failed: SMSGate rejected the request (HTTP 503)');
 });
 
 test('startup authentication failure reports HTTP status without rejecting or exposing credentials', async t => {
