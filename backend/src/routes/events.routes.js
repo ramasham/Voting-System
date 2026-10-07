@@ -6,6 +6,7 @@ const locationController = require('../controllers/location.controller');
 const router = express.Router();
 
 router.get('/', eventsController.getEvents);
+router.get('/:eventId/config', eventsController.getVotingConfig);
 router.get('/:eventId/categories', eventsController.getEventCategories);
 router.get('/:eventId/exhibitors', eventsController.getEventExhibitors);
 router.get('/:eventId/location', locationController.getLocationStatus);

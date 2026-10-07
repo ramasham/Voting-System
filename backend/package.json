@@ -7,6 +7,7 @@
     "test": "tests"
   },
   "scripts": {
+    "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:migrate": "node-pg-migrate up --migrations-dir db/migrations --envPath .env",
     "db:seed": "node db/seeds/initial-data.js",

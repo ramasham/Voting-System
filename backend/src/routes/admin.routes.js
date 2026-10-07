@@ -12,6 +12,9 @@ const router = express.Router();
 router.post('/login', adminAuthController.login);
 
 router.use(authenticate('admin'), adminApiRateLimit);
+router.get('/me', adminAuthController.me);
+router.post('/mfa/setup', adminAuthController.setupMfa);
+router.post('/mfa/confirm', adminAuthController.confirmMfa);
 
 router.get('/events/:eventId/settings', adminEventsController.getSettings);
 router.patch('/events/:eventId/settings', adminEventsController.updateSettings);

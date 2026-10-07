@@ -143,7 +143,30 @@ async function getEventExhibitors(req, res) {
   }
 }
 
+async function getVotingConfig(req, res) {
+  const eventId = parseEventId(req.params.eventId);
+  if (!eventId) return res.status(400).json({ success: false, message: 'Invalid event ID' });
+  try {
+    const result = await pool.query(
+      `SELECT CASE
+        WHEN COALESCE(s.voting_enabled, FALSE) = FALSE OR s.voting_start_at IS NULL OR s.voting_end_at IS NULL THEN 'closed'
+        WHEN CURRENT_TIMESTAMP < s.voting_start_at THEN 'not_started'
+        WHEN CURRENT_TIMESTAMP >= s.voting_end_at THEN 'closed'
+        ELSE 'open' END AS status,
+       COALESCE(TRIM(s.allowed_ip_ranges) <> '', FALSE) AS "requireNetworkCheck",
+       COALESCE(s.location_enabled, FALSE) AS "requireLocation", 30 AS "resendAfterSeconds"
+       FROM events e LEFT JOIN event_settings s ON s.event_id = e.id WHERE e.id = $1`, [eventId]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Event not found' });
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Voting config failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to read the voting window' });
+  }
+}
+
 module.exports = {
+  getVotingConfig,
   getEvents,
   getEventCategories,
   getEventExhibitors,

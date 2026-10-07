@@ -13,11 +13,26 @@ const votesRoutes = require('./routes/votes.routes');
 const app = express();
 const pool = require('../db/connection');
 const { getExhibitorPhoto } = require('./controllers/media.controller');
+const corsOrigins = new Set(
+    (process.env.CORS_ORIGINS || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+);
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Cache-Control', 'no-store');
+    const origin = req.get('Origin');
+    if (origin) res.vary('Origin');
+    if (origin && corsOrigins.has(origin)) {
+        res.set('Access-Control-Allow-Origin', origin);
+        res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.set('Access-Control-Max-Age', '600');
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
 });
 
@@ -64,6 +79,9 @@ app.get('/api/events/:eventId/venue-test', venueAccess, (req, res) => {
         success: true,
         message: 'You are inside the allowed network'
     });
+});
+app.post('/api/events/:eventId/venue-test', venueAccess, (req, res) => {
+    res.json({ success: true });
 });
 
 if (process.env.NODE_ENV !== 'production') {
