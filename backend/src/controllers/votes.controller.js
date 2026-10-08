@@ -1,5 +1,6 @@
 const { castVote, getVisitorVotes, VoteError } = require('../services/vote.service');
 const { recordAuditEvent } = require('../services/auditLog.service');
+const { readPresentationPass } = require('../services/presentationAccess');
 
 function fail(req, res, error, auditVote = false) {
   if (auditVote) {
@@ -31,6 +32,7 @@ async function castVoteController(req, res) {
       visitorId: req.auth.id,
       clientIp: req.ip,
       coordinates: req.body?.location,
+      presentationPass: readPresentationPass(req, req.params.eventId),
     });
     if (!vote.replayed) {
       await recordAuditEvent('VOTE_SUCCESS', {

@@ -27,7 +27,7 @@ async function getVisitorVotes({ eventId, visitorId }) {
     return result.rows;
 }
 
-async function castVote({ eventId, categoryId, exhibitorId, visitorId, clientIp, coordinates }) {
+async function castVote({ eventId, categoryId, exhibitorId, visitorId, clientIp, coordinates, presentationPass }) {
     eventId = parsePositiveInteger(eventId);
     categoryId = parsePositiveInteger(categoryId);
     exhibitorId = parsePositiveInteger(exhibitorId);
@@ -90,7 +90,7 @@ async function castVote({ eventId, categoryId, exhibitorId, visitorId, clientIp,
         }
 
         const settings = settingsResult.rows[0];
-        const venue = await checkVenueAccess(client, { eventId, settings, clientIp, coordinates });
+        const venue = await checkVenueAccess(client, { eventId, settings, clientIp, coordinates, presentationPass });
         if (!venue.allowed) throw new VoteError(venue.code, venue.status, venue.message);
 
         if (!settings.voting_enabled || !settings.window_started || !settings.window_not_ended) {

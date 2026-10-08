@@ -79,7 +79,7 @@ app.get('/ready', async (req, res) => {
 app.get('/api/events/:eventId/venue-test', venueAccess, (req, res) => {
     res.status(200).json({
         success: true,
-        message: 'You are inside the allowed network'
+        message: 'Voting access verified'
     });
 });
 app.post('/api/events/:eventId/venue-test', venueAccess, (req, res) => {

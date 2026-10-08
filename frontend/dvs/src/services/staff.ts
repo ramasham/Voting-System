@@ -98,6 +98,9 @@ export const staffApi = {
   async currentNetwork(token: string): Promise<{ ip: string; cidr: string }> {
     return backendRequest("/admin/network", { token })
   },
+  async approvePresentation(token: string, event: string): Promise<void> {
+    await backendRequest(`${eventPath(event)}/presentation`, { token, method: "POST" })
+  },
   async categories(token: string, event: string): Promise<StaffCategory[]> {
     if (staffMode === "mock") {
       requireDemoToken(token)

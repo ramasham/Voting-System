@@ -1,4 +1,5 @@
 const pool = require('../../db/connection');
+const { readPresentationPass, verifyPresentationPass } = require('../services/presentationAccess');
 
 function parseEventId(value) {
   const eventId = Number(value);
@@ -158,7 +159,10 @@ async function getVotingConfig(req, res) {
        FROM events e LEFT JOIN event_settings s ON s.event_id = e.id WHERE e.id = $1`, [eventId]
     );
     if (!result.rowCount) return res.status(404).json({ success: false, message: 'Event not found' });
-    return res.json({ success: true, data: result.rows[0] });
+    return res.json({ success: true, data: {
+      ...result.rows[0],
+      requirePresentationCheck: verifyPresentationPass(readPresentationPass(req, eventId), eventId),
+    } });
   } catch (error) {
     console.error('Voting config failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to read the voting window' });

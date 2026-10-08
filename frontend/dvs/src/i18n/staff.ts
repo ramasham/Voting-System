@@ -88,6 +88,11 @@ export const staffCopy = {
     ipRanges: "نطاقات شبكة المعرض",
     ipHint: "استخدم عنوان الشبكة العام، وليس عنوانها المحلي. يمكنك إضافة نطاقات CIDR مفصولة بفاصلة.",
     addCurrentNetwork: "إضافة الشبكة الحالية",
+    laptopVoting: "التصويت من كمبيوتر العرض",
+    laptopVotingBody:
+      "اعتمد هذا المتصفح لمدة 30 دقيقة وافتح صفحة التصويت دون طلب الموقع. ستكمل التحقق برقم الهاتف ورمز SMS، ويجب أن يكون التصويت مفتوحًا.",
+    voteFromLaptop: "التصويت من هذا الكمبيوتر",
+    openingVoting: "جارٍ فتح التصويت…",
     detectingNetwork: "جارٍ تحديد الشبكة…",
     networkAdded: "تمت إضافة الشبكة إلى الحقل. اضغط حفظ الإعدادات لاعتمادها.",
     currentNetworkHint:
@@ -292,6 +297,11 @@ export const staffCopy = {
     ipRanges: "Venue network ranges",
     ipHint: "Use the network's public address, rather than its local address. Separate CIDR ranges with commas.",
     addCurrentNetwork: "Add this network",
+    laptopVoting: "Vote from your presentation laptop",
+    laptopVotingBody:
+      "Approve this browser for 30 minutes and open voting without a location request. Phone and SMS verification still apply, and voting must be open.",
+    voteFromLaptop: "Vote from this laptop",
+    openingVoting: "Opening voting…",
     detectingNetwork: "Finding your network…",
     networkAdded: "Network added to the field. Save settings to approve it.",
     currentNetworkHint:

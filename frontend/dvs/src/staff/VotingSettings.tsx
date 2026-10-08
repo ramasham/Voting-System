@@ -12,6 +12,7 @@ import {
   isExpired,
   staffError,
   votingStatus,
+  routeUrl,
 } from "./utils"
 export default function VotingSettings({
   settings,
@@ -38,6 +39,8 @@ export default function VotingSettings({
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(false)
   const [capturingNetwork, setCapturingNetwork] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [presentationError, setPresentationError] = useState("")
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const status = votingStatus(settings)
@@ -135,6 +138,22 @@ export default function VotingSettings({
       { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
     )
   }
+  const presentVoting = async () => {
+    setBusy(true)
+    setPresenting(true)
+    setError("")
+    setNotice("")
+    setPresentationError("")
+    try {
+      await staffApi.approvePresentation(token, event)
+      window.location.assign(routeUrl("", event))
+    } catch (error) {
+      if (isExpired(error)) onExpired()
+      else setPresentationError(staffError(error, lang))
+      setBusy(false)
+      setPresenting(false)
+    }
+  }
   return (
     <div className="staff-voting-settings">
       <section className="staff-panel staff-voting-control">
@@ -160,6 +179,20 @@ export default function VotingSettings({
             size={18}
           />
           {settings.voting_enabled ? t.closeVoting : t.openVoting}
+        </button>
+      </section>
+      <section className="staff-panel mb-6">
+        <h2>{t.laptopVoting}</h2>
+        <p className="staff-muted">{t.laptopVotingBody}</p>
+        {presentationError && <p className="staff-error" role="alert">{presentationError}</p>}
+        <button
+          className="staff-button staff-button--primary"
+          type="button"
+          disabled={busy || staffMode === "mock"}
+          onClick={() => void presentVoting()}
+        >
+          {presenting ? t.openingVoting : t.voteFromLaptop}
+          <StaffIcon name="check" size={18} />
         </button>
       </section>
       <form onSubmit={save} className="staff-settings-grid">

@@ -24,6 +24,7 @@ export type Votes = Record<string, string>; // categoryId -> makerId
 export type AppConfig = {
   status: VotingStatus;
   requireNetworkCheck: boolean;
+  requirePresentationCheck?: boolean;
   requireLocation: boolean;
   resendAfterSeconds: number;
 };

@@ -51,7 +51,7 @@ export default function App() {
       }
       const session = await api.getMe();
       if (session) {
-        if (nextConfig.requireNetworkCheck || nextConfig.requireLocation) {
+        if (nextConfig.requireNetworkCheck || nextConfig.requirePresentationCheck || nextConfig.requireLocation) {
           setReturningSession(session);
           setScreen("check");
         } else enterSession(session);
@@ -113,7 +113,7 @@ export default function App() {
   }
 
   if (screen === "welcome") {
-    const needsCheck = Boolean(config && (config.requireNetworkCheck || config.requireLocation));
+    const needsCheck = Boolean(config && (config.requireNetworkCheck || config.requirePresentationCheck || config.requireLocation));
     return <Welcome lang={lang} onStart={() => setScreen(needsCheck ? "check" : "register")} setLang={setLang} />;
   }
   if (screen === "check" && config) {

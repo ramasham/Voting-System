@@ -2,6 +2,7 @@ const MIN_LOCATION_SAMPLES = 1;
 const VENUE_RADIUS_METERS = 100;
 const MAX_LOCATION_ACCURACY_METERS = 100;
 const { ipIsAllowed } = require('../utils/validation');
+const { verifyPresentationPass } = require('./presentationAccess');
 
 function parseCoordinates(body) {
   const latitude = body?.latitude;
@@ -75,8 +76,9 @@ async function rebuildEventZone(client, eventId) {
   return result.rows[0];
 }
 
-async function checkVenueAccess(client, { eventId, settings, clientIp, coordinates }) {
+async function checkVenueAccess(client, { eventId, settings, clientIp, coordinates, presentationPass }) {
   const reject = (code, status, message) => ({ allowed: false, code, status, message });
+  if (verifyPresentationPass(presentationPass, eventId)) return { allowed: true, method: 'presentation' };
   const hasRanges = typeof settings.allowed_ip_ranges === 'string' && settings.allowed_ip_ranges.trim() !== '';
   if (hasRanges && clientIp) {
     try {

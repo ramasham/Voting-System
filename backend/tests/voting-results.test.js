@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const pool = require('../db/connection');
 const { castVote, getVisitorVotes } = require('../src/services/vote.service');
 const { getResults } = require('../src/modules/results/results.service');
+const { issuePresentationPass } = require('../src/services/presentationAccess');
 
 const selection = { eventId: 1, categoryId: 2, exhibitorId: 3, visitorId: 4, clientIp: '127.0.0.1' };
 const settings = { voting_enabled: true, window_started: true, window_not_ended: true,
@@ -57,6 +58,31 @@ test('an approved network can cast a vote without GPS even when location verific
     assert.equal(db.calls.at(-1).sql, 'COMMIT');
     assert.equal(db.released, true);
 });
+
+test('an admin-approved laptop can cast a phone-verified vote without GPS or approved network ranges', async (t) => {
+    const previous = process.env.ADMIN_TOKEN_SECRET;
+    process.env.ADMIN_TOKEN_SECRET = 'presentation-vote-test-secret-'.repeat(3);
+    t.after(() => { if (previous === undefined) delete process.env.ADMIN_TOKEN_SECRET; else process.env.ADMIN_TOKEN_SECRET = previous; });
+    const db = database(t, { settings: { ...settings, allowed_ip_ranges: null, location_enabled: true, location_ready: true } });
+    assert.deepEqual(await castVote({ ...selection, presentationPass: issuePresentationPass(1, 1) }), { ...receipt, replayed: false });
+    assert.equal(db.calls.some((entry) => entry.sql.includes('ST_Covers')), false);
+    assert.equal(db.calls.at(-1).sql, 'COMMIT');
+});
+
+for (const scenario of [
+    { name: 'unverified phone', options: { verified: false }, code: 'PHONE_NOT_VERIFIED' },
+    { name: 'closed voting', options: { settings: { ...settings, voting_enabled: false } }, code: 'VOTING_CLOSED' },
+]) {
+    test(`presentation approval cannot bypass ${scenario.name}`, async (t) => {
+        const previous = process.env.ADMIN_TOKEN_SECRET;
+        process.env.ADMIN_TOKEN_SECRET = 'presentation-vote-test-secret-'.repeat(3);
+        t.after(() => { if (previous === undefined) delete process.env.ADMIN_TOKEN_SECRET; else process.env.ADMIN_TOKEN_SECRET = previous; });
+        const db = database(t, scenario.options);
+        await assert.rejects(castVote({ ...selection, presentationPass: issuePresentationPass(1, 1) }), { code: scenario.code });
+        assert.equal(db.calls.some((entry) => entry.sql.includes('INSERT INTO votes')), false);
+        assert.equal(db.calls.at(-1).sql, 'ROLLBACK');
+    });
+}
 
 test('an identical retry returns the original receipt after voting closes without inserting again', async (t) => {
     const db = database(t, { previous: [receipt], settings: { ...settings, voting_enabled: false } });

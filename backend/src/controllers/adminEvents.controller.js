@@ -2,6 +2,7 @@ const pool = require('../../db/connection');
 const ipaddr = require('ipaddr.js');
 const { parsePositiveInteger, normalizeAllowedIpRanges, parseOptionalDate } = require('../utils/validation');
 const { getResults: loadResults } = require('../modules/results/results.service');
+const { PRESENTATION_TTL_SECONDS, issuePresentationPass, presentationCookieName } = require('../services/presentationAccess');
 
 const settingsColumns = `event_id, voting_start_at, voting_end_at, voting_enabled,
   allowed_ip_ranges, location_enabled, location_config,
@@ -48,6 +49,26 @@ async function getSettings(req, res) {
   } catch (error) {
     console.error('Admin settings read failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to load event settings' });
+  }
+}
+
+async function approvePresentation(req, res) {
+  const eventId = parsePositiveInteger(req.params.eventId);
+  if (!eventId) return invalidEventId(res);
+  try {
+    const event = await pool.query('SELECT id FROM events WHERE id = $1', [eventId]);
+    if (!event.rowCount) return res.status(404).json({ success: false, message: 'Event not found' });
+    res.cookie(presentationCookieName(eventId), issuePresentationPass(eventId, req.auth.id), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: `/api/events/${eventId}`,
+      maxAge: PRESENTATION_TTL_SECONDS * 1000,
+    });
+    return res.json({ success: true, data: { expiresInSeconds: PRESENTATION_TTL_SECONDS } });
+  } catch (error) {
+    console.error('Presentation approval failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Unable to approve this browser for voting' });
   }
 }
 
@@ -381,6 +402,7 @@ async function exportResults(req, res) {
 
 
 module.exports = {
+  approvePresentation,
   getCurrentNetwork,
   getSettings,
   updateSettings,

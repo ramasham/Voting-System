@@ -20,6 +20,7 @@ router.post('/mfa/confirm', adminAuthController.confirmMfa);
 
 router.get('/events/:eventId/settings', adminEventsController.getSettings);
 router.patch('/events/:eventId/settings', adminEventsController.updateSettings);
+router.post('/events/:eventId/presentation', adminEventsController.approvePresentation);
 router.post('/events/:eventId/location/anchor', locationController.captureOrganizerAnchor);
 router.post('/events/:eventId/voting/open', adminEventsController.openVoting);
 router.post('/events/:eventId/voting/close', adminEventsController.closeVoting);
