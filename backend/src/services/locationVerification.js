@@ -43,6 +43,26 @@ async function insertSample(client, { eventId, source, visitorId, adminId, coord
   );
 }
 
+async function saveOrganizerAnchor(client, { eventId, adminId, coordinates }) {
+  await client.query(
+    `INSERT INTO event_location_samples
+       (event_id, source, admin_id, location, accuracy_m)
+     VALUES ($1, 'organizer_anchor', $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5)
+     ON CONFLICT (event_id) WHERE source = 'organizer_anchor'
+     DO UPDATE SET admin_id = EXCLUDED.admin_id,
+                   location = EXCLUDED.location,
+                   accuracy_m = EXCLUDED.accuracy_m,
+                   created_at = CURRENT_TIMESTAMP`,
+    [
+      eventId,
+      adminId,
+      coordinates.longitude,
+      coordinates.latitude,
+      coordinates.accuracy,
+    ]
+  );
+}
+
 async function rebuildEventZone(client, eventId) {
   const result = await client.query(
     `WITH zone AS (
@@ -122,6 +142,7 @@ module.exports = {
   MAX_LOCATION_ACCURACY_METERS,
   parseCoordinates,
   insertSample,
+  saveOrganizerAnchor,
   rebuildEventZone,
   checkVenueAccess,
 };

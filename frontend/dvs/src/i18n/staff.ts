@@ -108,7 +108,7 @@ export const staffCopy = {
     anchorSaved:
       "تم تسجيل موقع المعرض واعتماده فورًا. التحقق من الموقع جاهز.",
     anchorHint:
-      "سجّل موقع المعرض من حساب المسؤول بدقّة 100 متر أو أفضل. يُعتمد الموقع فورًا، ويُسمح بالتصويت ضمن 100 متر منه، دون الحاجة إلى عينات من الزوّار.",
+      "سجّل موقع المعرض من حساب المسؤول بدقّة 100 متر أو أفضل. كل ضغطة تأخذ موقعك الحالي وتستبدل الموقع السابق. يُعتمد الموقع فورًا، ويُسمح بالتصويت ضمن 100 متر منه، دون الحاجة إلى عينات من الزوّار.",
     shareVoting: "رابط التصويت ورمز QR",
     shareVotingBody:
       "شارك الرابط أو اطبع رمز QR ليتمكّن الزوّار من فتح صفحة التصويت على هواتفهم.",
@@ -203,7 +203,6 @@ export const staffCopy = {
       "لم يصل موقعك خلال 30 ثانية. تحقّق من خدمات الموقع وأعد المحاولة.",
     locationInaccurate:
       "دقّة الموقع غير كافية. نحتاج إلى دقّة 100 متر أو أفضل. جرّب جهازًا يدعم GPS، مثل الهاتف.",
-    anchorAlreadySet: "تم تسجيل موقع المعرض مسبقًا. لا يمكن تسجيله مرة أخرى.",
     setupExpired: "انتهت صلاحية الإعداد. ابدأ إعداد المصادقة مجددًا.",
   },
   en: {
@@ -320,7 +319,7 @@ export const staffCopy = {
     anchorSaved:
       "Venue location recorded and approved immediately. Location verification is ready.",
     anchorHint:
-      "Record the venue from your admin account with accuracy of 100 metres or better. It is approved immediately and allows voting within 100 metres, without visitor samples.",
+      "Record the venue from your admin account with accuracy of 100 metres or better. Each click captures your current location and replaces the previous location. It is approved immediately and allows voting within 100 metres, without visitor samples.",
     shareVoting: "Voting link and QR code",
     shareVotingBody:
       "Share the link or print the QR code so visitors can open the voting page on their phones.",
@@ -423,8 +422,6 @@ export const staffCopy = {
       "Your location did not arrive within 30 seconds. Check location services and try again.",
     locationInaccurate:
       "Location accuracy must be 100 meters or better. Try a GPS-capable device, such as a phone.",
-    anchorAlreadySet:
-      "The venue location has already been recorded for this event.",
     setupExpired: "Setup has expired. Start authenticator setup again.",
   },
 }

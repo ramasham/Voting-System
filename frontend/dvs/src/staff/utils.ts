@@ -46,7 +46,6 @@ export function staffError(error: unknown, lang: Language) {
     CATEGORY_EXHIBITORS_REQUIRED: t.categoriesRequired,
     INVALID_PHOTO: t.invalidPhoto,
     LOCATION_INACCURATE: t.locationInaccurate,
-    LOCATION_ANCHOR_ALREADY_SET: t.anchorAlreadySet,
   }
   return (
     errors[error.code] ??

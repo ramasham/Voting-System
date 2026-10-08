@@ -50,7 +50,7 @@ Every endpoint below requires a staff token.
 | `GET /admin/events/:eventId/settings` | Voting window, venue CIDRs, location readiness, enabled flags |
 | `PATCH /admin/events/:eventId/settings` | `{ votingStartAt, votingEndAt, allowedIpRanges, locationEnabled }`; ISO dates and comma-separated CIDRs |
 | `POST /admin/events/:eventId/presentation` | Approves this browser for the selected event for 30 minutes; sets an HttpOnly, Secure (production), SameSite=Strict cookie; returns `{ expiresInSeconds }`; preserves venue settings and still requires visitor phone verification |
-| `POST /admin/events/:eventId/location/anchor` | `{ latitude, longitude, accuracy }` |
+| `POST /admin/events/:eventId/location/anchor` | `{ latitude, longitude, accuracy }`; records or replaces the organizer anchor and immediately rebuilds the approved 100-metre venue zone |
 | `GET/POST /admin/events/:eventId/categories` | Read/create categories, capped at three |
 | `PATCH/DELETE /admin/events/:eventId/categories/:categoryId` | Update/remove a category; vote-protected removals |
 | `GET/POST /admin/events/:eventId/exhibitors` | Read/create exhibitors |

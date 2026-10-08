@@ -101,6 +101,8 @@ Admin APIs require an admin bearer token. Login is `POST /api/admin/login`. Admi
 
 Configure venue access through the authenticated admin event-settings API. Record the venue location through `POST /api/admin/events/:eventId/location/anchor` with accuracy of 100 metres or better. That single admin capture immediately enables location verification and creates a ready PostGIS zone within 100 metres of the recorded position; visitor samples are not required and cannot move or expand this zone. Approved network ranges remain an optional alternative to GPS. The location status reports `minimum_samples: 1` and `radius_meters: 100`. Existing admin anchors are upgraded by the admin-location-ready migration without another capture. Use the real event coordinates and network ranges for the event; local test coordinates are not production configuration.
 
+Repeating the anchor request replaces the previous organizer location and rebuilds the approved zone in the same transaction. Each event keeps one organizer anchor; failed requests preserve the previous location and zone.
+
 Voting must have a valid start/end window, three populated categories, and a usable venue policy before it can be opened through `POST /api/admin/events/:eventId/voting/open`. Vote acceptance checks the visitor token, verified phone, window, venue, category, assignment, and rate limit. PostgreSQL enforces one vote per visitor per category and event.
 
 ## WebSocket live results

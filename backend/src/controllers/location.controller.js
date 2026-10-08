@@ -81,9 +81,8 @@ async function captureOrganizerAnchor(req, res) {
     );
     await client.query('SELECT event_id FROM event_settings WHERE event_id = $1 FOR UPDATE', [eventId]);
 
-    await locationVerification.insertSample(client, {
+    await locationVerification.saveOrganizerAnchor(client, {
       eventId,
-      source: 'organizer_anchor',
       adminId: req.auth.id,
       coordinates,
     });
@@ -109,14 +108,6 @@ async function captureOrganizerAnchor(req, res) {
     });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
-    if (error.code === '23505') {
-      return res.status(409).json({
-        success: false,
-        code: 'LOCATION_ANCHOR_ALREADY_SET',
-        message: 'An organizer location anchor has already been recorded for this event',
-      });
-    }
-
     console.error(`Organizer location anchor failed for event ${eventId}:`, error.message);
     return res.status(500).json({ success: false, message: 'Unable to record organizer location' });
   } finally {

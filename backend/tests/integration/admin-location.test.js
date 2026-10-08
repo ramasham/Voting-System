@@ -40,7 +40,8 @@ test('admin location establishes a fixed venue without visitor samples', {
       );
       CREATE TEMP TABLE event_location_samples (
         id bigserial PRIMARY KEY, event_id integer NOT NULL, source varchar(30),
-        visitor_id integer, admin_id integer, location geometry(Point,4326), accuracy_m double precision
+        visitor_id integer, admin_id integer, location geometry(Point,4326), accuracy_m double precision,
+        created_at timestamptz DEFAULT CURRENT_TIMESTAMP
       );
       CREATE UNIQUE INDEX ON event_location_samples (event_id) WHERE source = 'organizer_anchor';
       CREATE UNIQUE INDEX ON event_location_samples (event_id, visitor_id) WHERE source = 'network_visitor';
@@ -100,9 +101,70 @@ test('admin location establishes a fixed venue without visitor samples', {
       }
     });
 
-    await t.test('capture accuracy, uniqueness and trusted visitor checks remain enforced', async () => {
+    await t.test('repeated admin captures replace the anchor and move the venue zone immediately', async () => {
+      const originalSettings = (await client.query(
+        'SELECT voting_enabled, allowed_ip_ranges FROM event_settings WHERE event_id = 1'
+      )).rows[0];
+      let previous = point;
+      for (const [offset, accuracy, adminId] of [[0.004, 8, 13], [-0.004, 4, 14], [-0.004, 7, 15]]) {
+        const current = { ...point, latitude: point.latitude + offset, accuracy };
+        const before = (await client.query(
+          "SELECT created_at FROM event_location_samples WHERE event_id = 1 AND source = 'organizer_anchor'"
+        )).rows[0].created_at;
+        const res = response();
+        await controller.captureOrganizerAnchor({
+          params: { eventId: '1' }, auth: { id: adminId }, body: current,
+        }, res);
+        assert.equal(res.statusCode, 201);
+        assert.equal(res.body.data.locationReady, true);
+        assert.equal(res.body.data.trustedSampleCount, 3, 'Recapturing does not add another sample');
+        assert.equal(res.body.data.radiusMeters, 100);
+        assert.equal((await access(current)).method, 'location');
+        assert.equal((await access({ ...current, latitude: current.latitude + 0.0007 })).allowed, true);
+        assert.equal((await access({ ...current, latitude: current.latitude + 0.0012 })).code, 'OUTSIDE_VENUE');
+        assert.equal((await access(point)).code, 'OUTSIDE_VENUE');
+        if (previous.latitude !== current.latitude) {
+          assert.equal((await access(previous)).code, 'OUTSIDE_VENUE');
+        }
+        const stored = await client.query(`
+          SELECT admin_id, ST_X(location) AS longitude, ST_Y(location) AS latitude,
+                 accuracy_m, created_at
+          FROM event_location_samples WHERE event_id = 1 AND source = 'organizer_anchor'
+        `);
+        assert.equal(stored.rowCount, 1);
+        assert.equal(stored.rows[0].admin_id, adminId);
+        assert.equal(stored.rows[0].longitude, current.longitude);
+        assert.equal(stored.rows[0].latitude, current.latitude);
+        assert.equal(stored.rows[0].accuracy_m, current.accuracy);
+        assert.ok(stored.rows[0].created_at >= before);
+        assert.deepEqual((await client.query(
+          'SELECT voting_enabled, allowed_ip_ranges FROM event_settings WHERE event_id = 1'
+        )).rows[0], originalSettings);
+        previous = current;
+      }
+    });
+
+    await t.test('invalid recaptures preserve the approved venue', async () => {
+      const zone = async () => (await client.query(
+        'SELECT ST_AsEWKB(location_zone) AS zone FROM event_settings WHERE event_id = 1'
+      )).rows[0].zone;
+      const initial = await zone();
+      for (const [body, code] of [
+        [{ ...point, latitude: 91 }, 'INVALID_LOCATION'],
+        [{ ...point, accuracy: 101 }, 'LOCATION_INACCURATE'],
+      ]) {
+        const res = response();
+        await controller.captureOrganizerAnchor({
+          params: { eventId: '1' }, auth: { id: 12 }, body,
+        }, res);
+        assert.equal(res.statusCode, 400);
+        assert.equal(res.body.code, code);
+        assert.deepEqual(await zone(), initial);
+      }
+    });
+
+    await t.test('capture accuracy and trusted visitor uniqueness checks remain enforced', async () => {
       for (const [eventId, accuracy, code] of [
-        ['1', 15, 'LOCATION_ANCHOR_ALREADY_SET'],
         ['2', 101, 'LOCATION_INACCURATE'],
       ]) {
         const res = response();
