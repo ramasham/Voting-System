@@ -5,6 +5,7 @@ const {
   validateName,
   validateDescription,
   validateImageUrl,
+  validateTeamMembers,
 } = require('../utils/validation');
 
 
@@ -420,6 +421,7 @@ async function getExhibitors(req, res) {
         e.name,
         e.description,
         e.image_url,
+        e.team_members,
 
         COUNT(c.id)::int AS "categoriesCount",
 
@@ -456,7 +458,8 @@ async function getExhibitors(req, res) {
         e.event_id,
         e.name,
         e.description,
-        e.image_url
+        e.image_url,
+        e.team_members
 
       ORDER BY e.name
       `,
@@ -523,6 +526,7 @@ async function createExhibitor(req, res) {
   let name;
   let description;
   let imageUrl;
+  let teamMembers;
 
   try {
     name = validateName(req.body?.name);
@@ -534,6 +538,8 @@ async function createExhibitor(req, res) {
     imageUrl = validateImageUrl(
       req.body?.imageUrl
     );
+
+    teamMembers = validateTeamMembers(req.body?.teamMembers);
 
   } catch (error) {
     return res.status(400).json({
@@ -580,22 +586,25 @@ async function createExhibitor(req, res) {
         event_id,
         name,
         description,
-        image_url
+        image_url,
+        team_members
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5::text[])
 
       RETURNING
         id,
         event_id,
         name,
         description,
-        image_url
+        image_url,
+        team_members
       `,
       [
         eventId,
         name,
         description,
-        imageUrl
+        imageUrl,
+        teamMembers
       ]
     );
 
@@ -695,7 +704,8 @@ async function updateExhibitor(req, res) {
     'categoryIds',
     'name',
     'description',
-    'imageUrl'
+    'imageUrl',
+    'teamMembers'
   ];
 
   if (
@@ -787,6 +797,11 @@ async function updateExhibitor(req, res) {
       assignments.push(
         `image_url = $${values.length}`
       );
+    }
+
+    if (Object.hasOwn(body, 'teamMembers')) {
+      values.push(validateTeamMembers(body.teamMembers));
+      assignments.push(`team_members = $${values.length}::text[]`);
     }
 
   } catch (error) {
@@ -989,7 +1004,8 @@ async function updateExhibitor(req, res) {
           event_id,
           name,
           description,
-          image_url
+          image_url,
+          team_members
         `,
         values
       );
@@ -1005,7 +1021,8 @@ async function updateExhibitor(req, res) {
           event_id,
           name,
           description,
-          image_url
+          image_url,
+          team_members
 
         FROM exhibitors
 

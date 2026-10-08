@@ -165,10 +165,12 @@ export function demoCatalog(): Catalog {
           ar: e.labels?.ar.description ?? e.description,
           en: e.labels?.en.description ?? e.description,
         },
-        members: (e.labels?.ar.members ?? []).map((name, i) => ({
-          ar: name,
-          en: e.labels?.en.members[i] ?? name,
-        })),
+        members: e.team_members
+          ? e.team_members.map((name) => ({ ar: name, en: name }))
+          : (e.labels?.ar.members ?? []).map((name, i) => ({
+              ar: name,
+              en: e.labels?.en.members[i] ?? name,
+            })),
         image: e.image_url,
         imageAlt: { ar: e.name, en: e.labels?.en.name ?? e.name },
       })),

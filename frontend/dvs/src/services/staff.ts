@@ -187,15 +187,18 @@ export const staffApi = {
         name: input.name.trim(),
         description: input.description.trim(),
         image_url: input.imageUrl,
+        team_members: input.teamMembers.map((name) => name.trim()),
         labels: previous?.labels
           ? {
               ar: {
                 ...previous.labels.ar,
+                members: input.teamMembers.map((name) => name.trim()),
                 name: input.name.trim(),
                 description: input.description.trim(),
               },
               en: {
                 ...previous.labels.en,
+                members: input.teamMembers.map((name) => name.trim()),
                 name: input.name.trim(),
                 description: input.description.trim(),
               },

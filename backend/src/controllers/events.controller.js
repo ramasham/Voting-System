@@ -108,6 +108,7 @@ async function getEventExhibitors(req, res) {
         e.name,
         e.description,
         e.image_url,
+        e.team_members,
         COUNT(c.id)::int AS "categoriesCount",
         COALESCE(
           json_agg(
@@ -124,7 +125,7 @@ async function getEventExhibitors(req, res) {
         ON c.event_id = eca.event_id
        AND c.id = eca.category_id
       WHERE e.event_id = $1
-      GROUP BY e.id, e.event_id, e.name, e.description, e.image_url
+      GROUP BY e.id, e.event_id, e.name, e.description, e.image_url, e.team_members
       ORDER BY e.name
       `,
       [eventId]

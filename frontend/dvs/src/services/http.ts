@@ -218,6 +218,7 @@ export function createHttpApi(): Api {
             categoryId: String(c.id),
             title: { ar: e.name, en: e.name },
             team: { ar: "", en: "" },
+            members: (e.team_members ?? []).map((name) => ({ ar: name, en: name })),
             short: { ar: e.description ?? "", en: e.description ?? "" },
             long: { ar: e.description ?? "", en: e.description ?? "" },
             image: mediaUrl(e.image_url),

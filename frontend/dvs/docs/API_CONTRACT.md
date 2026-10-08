@@ -17,7 +17,7 @@ Paths below are relative to `/api`.
 | `GET /events` | Event list |
 | `GET /events/:eventId/config` | `{ status, requireNetworkCheck, requireLocation, resendAfterSeconds }`; status uses database time and voting settings |
 | `GET /events/:eventId/categories` | Categories ordered by display order |
-| `GET /events/:eventId/exhibitors` | Names, descriptions, image URLs, and category assignments |
+| `GET /events/:eventId/exhibitors` | Names, descriptions, image URLs, `team_members: string[]`, and category assignments |
 | `GET /events/:eventId/venue-test` | Tests request IP against venue policy |
 | `POST /events/:eventId/venue-test` | Tests policy with optional `{ location: { latitude, longitude, accuracy } }` |
 | `POST /auth/register` | `{ name, phoneNumber }`; E.164 phone; stores/updates visitor and sends OTP |
@@ -29,7 +29,7 @@ Paths below are relative to `/api`.
 | `POST /events/:eventId/location/samples` | Optional legacy samples; verified visitor token and approved network; `{ latitude, longitude, accuracy }`; cannot change the admin zone |
 | `GET /media/exhibitors/:exhibitorId/photo` | Stored photo bytes |
 
-The catalog adapter combines categories and exhibitors. A multi-category exhibitor appears in each assigned category. There are three categories with no fixed exhibitor count. Real names/descriptions come from PostgreSQL; sample team member names belong only to the demo catalog.
+The catalog adapter combines categories and exhibitors. A multi-category exhibitor appears in each assigned category. There are three categories with no fixed exhibitor count. Project details and team-member names come from PostgreSQL. Names entered by staff appear in the project sheet in either interface language. Projects without names show the translated unavailable message; demo names remain separate from production data.
 
 Identical vote retries return the existing vote without increasing counts. Changing an already-cast category vote is rejected with `DUPLICATE_VOTE`; the adapter reloads the visitor's votes. Other errors include `INVALID_OR_EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, `INVALID_TOKEN`, `VOTING_CLOSED`, `OUTSIDE_VENUE`, `LOCATION_REQUIRED`, `LOCATION_INACCURATE`, `LOCATION_NOT_READY`, and `RATE_LIMITED`. `LOCATION_NOT_READY` means GPS-only access is blocked while the venue zone is being established; approved network access remains available.
 
@@ -68,12 +68,13 @@ Exhibitor create/update body:
 {
   "name": "Project name",
   "description": "Project description",
+  "teamMembers": ["First member", "Second member"],
   "imageUrl": "https://example.com/project.jpg",
   "categoryIds": [1, 3]
 }
 ```
 
-The response includes `{ id, event_id, name, description, image_url, categories: [{ id, name }] }`. Uploaded images use `/api/media/exhibitors/:id/photo`. An assignment with recorded votes cannot be removed. The UI confirms delete/open/close/reset and requires typed `RESET` for resetting.
+The response includes `{ id, event_id, name, description, image_url, team_members, categories: [{ id, name }] }`. `teamMembers` is an optional array of up to 30 nonempty, single-line names, each at most 255 characters; names are trimmed and their order is preserved. Omitting it during creation defaults to `[]`; omitting it during PATCH preserves existing names. Send `[]` to clear the list. The admin project editor accepts one name per line and ignores blank lines. Uploaded images use `/api/media/exhibitors/:id/photo`. An assignment with recorded votes cannot be removed. The UI confirms delete/open/close/reset and requires typed `RESET` for resetting.
 
 MFA needs its migration and server-only `MFA_ENCRYPTION_KEY` (32 random bytes as 64 hex characters). AES-256-GCM protects stored secrets. Codes follow [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238), tolerate one clock step, and consume counters atomically to prevent replay. Enrollment requires password reauthentication and code confirmation. No public recovery/disable endpoint is provided.
 
