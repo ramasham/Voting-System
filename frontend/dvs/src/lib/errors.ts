@@ -9,6 +9,8 @@ export function errorMessage(lang: Language, error: unknown): string {
   switch (error.code) {
     case "NETWORK":
       return t.errNetwork;
+    case "SMS_UNAVAILABLE":
+      return t.errSms;
     case "RATE_LIMITED":
       return t.errRate.replace("{s}", String(error.retryAfterSeconds ?? 60));
     case "OTP_INVALID":

@@ -24,6 +24,8 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Cache-Control', 'no-store');
+    const revision = process.env.RENDER_GIT_COMMIT;
+    if (/^[a-f0-9]{40}$/i.test(revision || '')) res.set('X-App-Revision', revision);
     const origin = req.get('Origin');
     if (origin) res.vary('Origin');
     if (origin && corsOrigins.has(origin)) {
@@ -77,7 +79,7 @@ app.get('/ready', async (req, res) => {
 app.get('/api/events/:eventId/venue-test', venueAccess, (req, res) => {
     res.status(200).json({
         success: true,
-        message: 'You are inside the allowed network'
+        message: 'Voting access verified'
     });
 });
 app.post('/api/events/:eventId/venue-test', venueAccess, (req, res) => {
@@ -91,6 +93,16 @@ if (process.env.NODE_ENV !== 'production') {
             message: 'Request allowed'
         });
     });
+}
+
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'API route not found' });
+});
+
+if (process.env.NODE_ENV === 'production' || process.env.SERVE_FRONTEND === 'true') {
+    const path = require('node:path');
+    const { serveFrontend } = require('./services/serveFrontend');
+    serveFrontend(app, path.resolve(__dirname, '../../frontend/dvs/dist'));
 }
 
 app.use((error, req, res, next) => {

@@ -14,11 +14,13 @@ router.post('/login', adminAuthController.login);
 
 router.use(authenticate('admin'), adminApiRateLimit, auditAdminMutation);
 router.get('/me', adminAuthController.me);
+router.get('/network', adminEventsController.getCurrentNetwork);
 router.post('/mfa/setup', adminAuthController.setupMfa);
 router.post('/mfa/confirm', adminAuthController.confirmMfa);
 
 router.get('/events/:eventId/settings', adminEventsController.getSettings);
 router.patch('/events/:eventId/settings', adminEventsController.updateSettings);
+router.post('/events/:eventId/presentation', adminEventsController.approvePresentation);
 router.post('/events/:eventId/location/anchor', locationController.captureOrganizerAnchor);
 router.post('/events/:eventId/voting/open', adminEventsController.openVoting);
 router.post('/events/:eventId/voting/close', adminEventsController.closeVoting);

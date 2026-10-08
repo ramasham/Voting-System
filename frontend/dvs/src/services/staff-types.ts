@@ -19,6 +19,7 @@ export type StaffExhibitor = {
   name: string
   description: string
   image_url: string
+  team_members?: string[]
   categories: {
     id: string
     name: string
@@ -51,6 +52,7 @@ export type ExhibitorInput = {
   description: string
   imageUrl: string
   categoryIds: string[]
+  teamMembers: string[]
 }
 export type ResultExhibitor = {
   exhibitorId: string

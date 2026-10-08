@@ -3,6 +3,7 @@ import type { Category, Maker } from "../data/config";
 export type ApiErrorCode =
   | "NETWORK" // the device could not reach the server (offline, timeout)
   | "SERVER" // 5xx or unexpected response
+  | "SMS_UNAVAILABLE" // the verification text could not be sent
   | "VALIDATION" // bad input (name/phone/code format)
   | "OTP_INVALID"
   | "OTP_EXPIRED"
@@ -23,6 +24,7 @@ export type Votes = Record<string, string>; // categoryId -> makerId
 export type AppConfig = {
   status: VotingStatus;
   requireNetworkCheck: boolean;
+  requirePresentationCheck?: boolean;
   requireLocation: boolean;
   resendAfterSeconds: number;
 };

@@ -1,6 +1,7 @@
 const pool = require('../../db/connection');
 const { parsePositiveInteger, ipIsAllowed } = require('../utils/validation');
 const { checkVenueAccess } = require('../services/locationVerification');
+const { readPresentationPass } = require('../services/presentationAccess');
 
 async function venueAccess(req, res, next) {
   const eventId = parsePositiveInteger(req.params.eventId);
@@ -23,6 +24,7 @@ async function venueAccess(req, res, next) {
       settings: result.rows[0],
       clientIp: req.ip,
       coordinates: req.body?.location,
+      presentationPass: readPresentationPass(req, eventId),
     });
     if (!access.allowed) {
       return res.status(access.status).json({ success: false, code: access.code, message: access.message });

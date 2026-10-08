@@ -55,6 +55,9 @@ export const staffCopy = {
     editProject: "تعديل المشروع",
     name: "اسم المشروع",
     description: "وصف المشروع",
+    teamMembers: "أعضاء الفريق",
+    teamMembersHint: "اكتب اسم كل عضو في سطر منفصل. حقل اختياري، حتى 30 عضوًا.",
+    teamMembersInvalid: "أدخل حتى 30 اسمًا، بحد أقصى 255 حرفًا لكل اسم.",
     photo: "صورة المشروع",
     upload: "اختيار صورة",
     photoHint: "PNG أو JPEG أو WebP · حتى 2 ميغابايت",
@@ -86,13 +89,40 @@ export const staffCopy = {
     venueBody:
       "يسمح الخادم بالتصويت من شبكة المعرض المعتمدة أو من الموقع المعتمد عند تفعيله.",
     ipRanges: "نطاقات شبكة المعرض",
-    ipHint: "أدخل نطاقات CIDR مفصولة بفاصلة. مثال: 192.168.1.0/24",
+    ipHint: "استخدم عنوان الشبكة العام، وليس عنوانها المحلي. يمكنك إضافة نطاقات CIDR مفصولة بفاصلة.",
+    addCurrentNetwork: "إضافة الشبكة الحالية",
+    laptopVoting: "التصويت من كمبيوتر العرض",
+    laptopVotingBody:
+      "اعتمد هذا المتصفح لمدة 30 دقيقة وافتح صفحة التصويت دون طلب الموقع. ستكمل التحقق برقم الهاتف ورمز SMS، ويجب أن يكون التصويت مفتوحًا.",
+    voteFromLaptop: "التصويت من هذا الكمبيوتر",
+    openingVoting: "جارٍ فتح التصويت…",
+    detectingNetwork: "جارٍ تحديد الشبكة…",
+    networkAdded: "تمت إضافة الشبكة إلى الحقل. اضغط حفظ الإعدادات لاعتمادها.",
+    currentNetworkHint:
+      "اتصل بشبكة المعرض أو نقطة الاتصال التي ستستخدمها في العرض، ثم أضفها واحفظ الإعدادات. يستطيع الكمبيوتر التصويت عبر الشبكة المعتمدة دون الحاجة إلى موقع دقيق.",
     locationEnabled: "تفعيل التحقّق من الموقع",
     ready: "جاهز",
-    learning: "بانتظار عينات الموقع",
+    learning: "بانتظار تسجيل موقع المعرض",
     captureAnchor: "تسجيل موقع المعرض",
+    locating: "جارٍ تحديد الموقع…",
+    anchorSaved:
+      "تم تسجيل موقع المعرض واعتماده فورًا. التحقق من الموقع جاهز.",
     anchorHint:
-      "سجّل موقعك وأنت داخل المعرض. يحتاج الموقع إلى ثلاث عينات موثوقة على الأقل قبل اعتماده.",
+      "سجّل موقع المعرض من حساب المسؤول بدقّة 100 متر أو أفضل. كل ضغطة تأخذ موقعك الحالي وتستبدل الموقع السابق. يُعتمد الموقع فورًا، ويُسمح بالتصويت ضمن 100 متر منه، دون الحاجة إلى عينات من الزوّار.",
+    shareVoting: "رابط التصويت ورمز QR",
+    shareVotingBody:
+      "شارك الرابط أو اطبع رمز QR ليتمكّن الزوّار من فتح صفحة التصويت على هواتفهم.",
+    votingLink: "رابط صفحة التصويت",
+    copyLink: "نسخ الرابط",
+    linkCopied: "تم نسخ رابط التصويت.",
+    copyLinkError: "تعذّر نسخ الرابط. حدّده من الحقل وانسخه يدويًا.",
+    downloadQr: "تنزيل رمز QR",
+    votingQr: "رمز QR لصفحة التصويت",
+    scanToVote: "امسح الرمز لفتح التصويت",
+    shareLocalHint:
+      "هذا الرابط يعمل على هذا الكمبيوتر فقط. افتح لوحة الإدارة من رابط الموقع المنشور للحصول على رمز QR يعمل على الهواتف.",
+    shareHttpsHint:
+      "هذا الرمز يفتح رابط HTTP، ولن يطلب الموقع على الهواتف. افتح لوحة الإدارة عبر رابط HTTPS المنشور ثم نزّل الرمز من هناك.",
     export: "تصدير النتائج",
     exportBody: "تنزيل عدد الأصوات لكل مشروع وفئة بصيغة CSV.",
     reset: "تصفير النتائج",
@@ -161,6 +191,18 @@ export const staffCopy = {
       "يجب تجهيز ثلاث فئات وإضافة مشروع واحد على الأقل لكل فئة.",
     locationError:
       "تعذّر الحصول على موقعك. اسمح بالوصول إلى الموقع وأعد المحاولة.",
+    locationInsecure:
+      "يتطلّب تحديد الموقع اتصال HTTPS. للاختبار على هذا الجهاز، افتح الموقع باستخدام http://localhost:8443.",
+    locationUnsupported:
+      "هذا المتصفح لا يدعم تحديد الموقع. جرّب متصفحًا يدعم خدمات الموقع.",
+    locationDenied:
+      "الوصول إلى الموقع محظور. اسمح لهذا الموقع بالوصول إلى موقعك من إعدادات المتصفح، ثم أعد المحاولة.",
+    locationUnavailable:
+      "لم يتمكّن المتصفح من تحديد موقع هذا الجهاز. تحقّق من الاتصال بالإنترنت وخدمات الموقع، أو جرّب هاتفًا عبر HTTPS.",
+    locationTimeout:
+      "لم يصل موقعك خلال 30 ثانية. تحقّق من خدمات الموقع وأعد المحاولة.",
+    locationInaccurate:
+      "دقّة الموقع غير كافية. نحتاج إلى دقّة 100 متر أو أفضل. جرّب جهازًا يدعم GPS، مثل الهاتف.",
     setupExpired: "انتهت صلاحية الإعداد. ابدأ إعداد المصادقة مجددًا.",
   },
   en: {
@@ -223,6 +265,9 @@ export const staffCopy = {
     editProject: "Edit project",
     name: "Project name",
     description: "Project description",
+    teamMembers: "Team members",
+    teamMembersHint: "Enter one name per line. Optional, up to 30 members.",
+    teamMembersInvalid: "Enter up to 30 names, with at most 255 characters per name.",
     photo: "Project visual",
     upload: "Choose photo",
     photoHint: "PNG, JPEG or WebP · up to 2 MB",
@@ -255,13 +300,41 @@ export const staffCopy = {
     venueBody:
       "The server permits voting from the approved venue network or the approved location when enabled.",
     ipRanges: "Venue network ranges",
-    ipHint: "Enter comma-separated CIDR ranges. For example: 192.168.1.0/24",
+    ipHint: "Use the network's public address, rather than its local address. Separate CIDR ranges with commas.",
+    addCurrentNetwork: "Add this network",
+    laptopVoting: "Vote from your presentation laptop",
+    laptopVotingBody:
+      "Approve this browser for 30 minutes and open voting without a location request. Phone and SMS verification still apply, and voting must be open.",
+    voteFromLaptop: "Vote from this laptop",
+    openingVoting: "Opening voting…",
+    detectingNetwork: "Finding your network…",
+    networkAdded: "Network added to the field. Save settings to approve it.",
+    currentNetworkHint:
+      "Connect to the venue Wi-Fi or the hotspot you will use for the presentation, then add it and save settings. Computers can vote through the approved network without a precise location.",
     locationEnabled: "Enable location verification",
     ready: "Ready",
-    learning: "Waiting for location samples",
+    learning: "Waiting for the venue location",
     captureAnchor: "Record venue location",
+    locating: "Finding your location…",
+    anchorSaved:
+      "Venue location recorded and approved immediately. Location verification is ready.",
     anchorHint:
-      "Record your position while at the venue. The location needs at least three trusted samples before it is ready.",
+      "Record the venue from your admin account with accuracy of 100 metres or better. Each click captures your current location and replaces the previous location. It is approved immediately and allows voting within 100 metres, without visitor samples.",
+    shareVoting: "Voting link and QR code",
+    shareVotingBody:
+      "Share the link or print the QR code so visitors can open the voting page on their phones.",
+    votingLink: "Voting page link",
+    copyLink: "Copy link",
+    linkCopied: "Voting link copied.",
+    copyLinkError:
+      "Unable to copy the link. Select it in the field and copy it manually.",
+    downloadQr: "Download QR code",
+    votingQr: "Voting page QR code",
+    scanToVote: "Scan to open voting",
+    shareLocalHint:
+      "This link only works on this computer. Open the admin panel at the published website address to get a QR code that works on phones.",
+    shareHttpsHint:
+      "This QR opens an HTTP link, which cannot request location on phones. Open the admin panel using the published HTTPS address and download the QR there.",
     export: "Export results",
     exportBody:
       "Download vote counts for every project and category as a CSV file.",
@@ -337,6 +410,18 @@ export const staffCopy = {
       "Set up three categories with at least one project in each.",
     locationError:
       "Unable to get your position. Allow location access and try again.",
+    locationInsecure:
+      "Location requires HTTPS. To test on this computer, open http://localhost:8443.",
+    locationUnsupported:
+      "This browser does not support location. Try a browser with location services.",
+    locationDenied:
+      "Location access is blocked. Allow this site to access your location in browser settings, then try again.",
+    locationUnavailable:
+      "Your browser could not locate this device. Check your internet connection and location services, or try a phone over HTTPS.",
+    locationTimeout:
+      "Your location did not arrive within 30 seconds. Check location services and try again.",
+    locationInaccurate:
+      "Location accuracy must be 100 meters or better. Try a GPS-capable device, such as a phone.",
     setupExpired: "Setup has expired. Start authenticator setup again.",
   },
 }

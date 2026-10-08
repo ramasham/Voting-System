@@ -2,6 +2,8 @@ node_modules/
 
 backend/node_modules/
 backend/.env
+backend/.env.deploy
+backend/.admin-credentials*
 
 frontend/node_modules/
 frontend/.env

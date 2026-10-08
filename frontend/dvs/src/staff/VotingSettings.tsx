@@ -4,6 +4,7 @@ import { staffCopy } from "../i18n/staff"
 import { staffApi, staffMode } from "../services/staff"
 import type { EventSettings } from "../services/staff-types"
 import StaffIcon from "./StaffIcon"
+import VotingShare from "./VotingShare"
 import {
   ammanInput,
   ammanIso,
@@ -11,6 +12,7 @@ import {
   isExpired,
   staffError,
   votingStatus,
+  routeUrl,
 } from "./utils"
 export default function VotingSettings({
   settings,
@@ -35,6 +37,10 @@ export default function VotingSettings({
   const [ranges, setRanges] = useState(settings.allowed_ip_ranges ?? "")
   const [location, setLocation] = useState(settings.location_enabled)
   const [busy, setBusy] = useState(false)
+  const [locating, setLocating] = useState(false)
+  const [capturingNetwork, setCapturingNetwork] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [presentationError, setPresentationError] = useState("")
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const status = votingStatus(settings)
@@ -70,15 +76,45 @@ export default function VotingSettings({
       t.saved,
     )
   }
+  const addCurrentNetwork = async () => {
+    setBusy(true)
+    setCapturingNetwork(true)
+    setError("")
+    setNotice("")
+    try {
+      const { cidr } = await staffApi.currentNetwork(token)
+      setRanges((current) => {
+        const existing = current
+          .split(",")
+          .map((range) => range.trim())
+          .filter(Boolean)
+        return existing.includes(cidr) ? current : [...existing, cidr].join(", ")
+      })
+      setNotice(t.networkAdded)
+    } catch (error) {
+      if (isExpired(error)) onExpired()
+      else setError(staffError(error, lang))
+    } finally {
+      setBusy(false)
+      setCapturingNetwork(false)
+    }
+  }
   const anchor = () => {
+    setError("")
+    setNotice("")
+    if (!window.isSecureContext) {
+      setError(t.locationInsecure)
+      return
+    }
     if (!navigator.geolocation) {
-      setError(t.locationError)
+      setError(t.locationUnsupported)
       return
     }
     setBusy(true)
-    setError("")
+    setLocating(true)
     navigator.geolocation.getCurrentPosition(
       (p) => {
+        setLocating(false)
         void perform(
           () =>
             staffApi.anchor(token, event, {
@@ -86,15 +122,37 @@ export default function VotingSettings({
               longitude: p.coords.longitude,
               accuracy: p.coords.accuracy,
             }),
-          t.saved,
+          t.anchorSaved,
         )
       },
-      () => {
+      (error) => {
         setBusy(false)
-        setError(t.locationError)
+        setLocating(false)
+        const messages: Record<number, string> = {
+          1: t.locationDenied,
+          2: t.locationUnavailable,
+          3: t.locationTimeout,
+        }
+        setError(messages[error.code] ?? t.locationError)
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
     )
+  }
+  const presentVoting = async () => {
+    setBusy(true)
+    setPresenting(true)
+    setError("")
+    setNotice("")
+    setPresentationError("")
+    try {
+      await staffApi.approvePresentation(token, event)
+      window.location.assign(routeUrl("", event))
+    } catch (error) {
+      if (isExpired(error)) onExpired()
+      else setPresentationError(staffError(error, lang))
+      setBusy(false)
+      setPresenting(false)
+    }
   }
   return (
     <div className="staff-voting-settings">
@@ -121,6 +179,20 @@ export default function VotingSettings({
             size={18}
           />
           {settings.voting_enabled ? t.closeVoting : t.openVoting}
+        </button>
+      </section>
+      <section className="staff-panel mb-6">
+        <h2>{t.laptopVoting}</h2>
+        <p className="staff-muted">{t.laptopVotingBody}</p>
+        {presentationError && <p className="staff-error" role="alert">{presentationError}</p>}
+        <button
+          className="staff-button staff-button--primary"
+          type="button"
+          disabled={busy || staffMode === "mock"}
+          onClick={() => void presentVoting()}
+        >
+          {presenting ? t.openingVoting : t.voteFromLaptop}
+          <StaffIcon name="check" size={18} />
         </button>
       </section>
       <form onSubmit={save} className="staff-settings-grid">
@@ -171,6 +243,15 @@ export default function VotingSettings({
             />
             <small>{t.ipHint}</small>
           </label>
+          <button
+            className="staff-button staff-button--outline"
+            type="button"
+            disabled={busy || staffMode === "mock"}
+            onClick={() => void addCurrentNetwork()}
+          >
+            {capturingNetwork ? t.detectingNetwork : t.addCurrentNetwork}
+          </button>
+          <p className="staff-hint">{t.currentNetworkHint}</p>
           <label className="staff-switch">
             <input
               type="checkbox"
@@ -200,7 +281,7 @@ export default function VotingSettings({
                 onClick={anchor}
               >
                 <StaffIcon name="pin" size={18} />
-                {t.captureAnchor}
+                {locating ? t.locating : t.captureAnchor}
               </button>
             </div>
           )}
@@ -220,11 +301,12 @@ export default function VotingSettings({
             className="staff-button staff-button--primary"
             disabled={busy}
           >
-            {busy ? t.saving : t.save}
+            {capturingNetwork ? t.detectingNetwork : busy ? t.saving : t.save}
             <StaffIcon name="check" size={18} />
           </button>
         </div>
       </form>
+      <VotingShare event={event} lang={lang} locationEnabled={location} />
       <section className="staff-panel staff-result-tools">
         <div>
           <h2>{t.resultsTools}</h2>

@@ -31,7 +31,7 @@ function safeDetails(type, input) {
     }
     if (type === 'ADMIN_MUTATION') {
         if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(input.method)) details.method = input.method;
-        if (typeof input.action === 'string' && input.action.length <= 100 && /^\/events\/:id\/(?:settings|location\/anchor|voting\/(?:open|close)|categories(?:\/:id)?|exhibitors(?:\/:id(?:\/photo)?)?|results(?:\/reset)?|export\.csv)$/.test(input.action)) {
+        if (typeof input.action === 'string' && input.action.length <= 100 && /^\/events\/:id\/(?:settings|presentation|location\/anchor|voting\/(?:open|close)|categories(?:\/:id)?|exhibitors(?:\/:id(?:\/photo)?)?|results(?:\/reset)?|export\.csv)$/.test(input.action)) {
             details.action = input.action;
         }
         const eventId = positiveId(input.eventId);

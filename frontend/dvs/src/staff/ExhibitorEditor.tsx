@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useId, useState, type FormEvent } from "react"
 import type { Language } from "../data/config"
 import { staffCopy } from "../i18n/staff"
 import { staffApi } from "../services/staff"
@@ -31,10 +31,14 @@ export default function ExhibitorEditor({
   onExpired: () => void
 }) {
   const t = staffCopy[lang]
+  const teamMembersId = useId()
   const [id, setId] = useState(initial?.id)
   const [name, setName] = useState(initial ? exhibitorName(initial, lang) : "")
   const [description, setDescription] = useState(
     initial?.labels?.[lang].description ?? initial?.description ?? "",
+  )
+  const [teamMembers, setTeamMembers] = useState(
+    (initial?.team_members ?? initial?.labels?.[lang].members ?? []).join("\n"),
   )
   const [imageUrl, setImageUrl] = useState(
     initial?.image_url.startsWith("data:") ? "" : (initial?.image_url ?? ""),
@@ -62,6 +66,14 @@ export default function ExhibitorEditor({
       setError(t.validation)
       return
     }
+    const names = teamMembers
+      .split(/\r?\n/)
+      .map((name) => name.trim())
+      .filter(Boolean)
+    if (names.length > 30 || names.some((name) => name.length > 255)) {
+      setError(t.teamMembersInvalid)
+      return
+    }
     setBusy(true)
     try {
       const saved = await staffApi.saveExhibitor(
@@ -70,6 +82,7 @@ export default function ExhibitorEditor({
         {
           name,
           description,
+          teamMembers: names,
           categoryIds,
           imageUrl: imageUrl.trim() || initial?.image_url || "",
         },
@@ -170,6 +183,23 @@ export default function ExhibitorEditor({
               disabled={busy}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </label>
+          <label className="staff-field">
+            <span id={`${teamMembersId}-label`}>{t.teamMembers}</span>
+            <textarea
+              id={teamMembersId}
+              name="teamMembers"
+              rows={4}
+              maxLength={8000}
+              value={teamMembers}
+              disabled={busy}
+              aria-labelledby={`${teamMembersId}-label`}
+              aria-describedby={`${teamMembersId}-hint`}
+              onChange={(e) => setTeamMembers(e.target.value)}
+            />
+            <small id={`${teamMembersId}-hint`} className="staff-hint">
+              {t.teamMembersHint}
+            </small>
           </label>
           <fieldset className="staff-category-options">
             <legend>{t.chooseCategories}</legend>

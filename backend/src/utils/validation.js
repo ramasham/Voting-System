@@ -144,6 +144,22 @@ function validateDescription(value) {
   return value.trim();
 }
 
+function validateTeamMembers(value) {
+  if (value === undefined) return [];
+
+  if (!Array.isArray(value) || value.length > 30) {
+    throw new Error('teamMembers must be an array of at most 30 names');
+  }
+
+  return value.map((member) => {
+    const name = validateName(member, 'Each team member name');
+    if (/[\r\n\0]/.test(name)) {
+      throw new Error('Each team member name must be a single line');
+    }
+    return name;
+  });
+}
+
 function validateImageUrl(value) {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -174,6 +190,7 @@ module.exports = {
   parseOptionalDate,
   validateName,
   validateDescription,
+  validateTeamMembers,
   validateImageUrl,
   ipIsAllowed,
 };

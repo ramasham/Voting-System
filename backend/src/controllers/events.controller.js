@@ -1,4 +1,5 @@
 const pool = require('../../db/connection');
+const { readPresentationPass, verifyPresentationPass } = require('../services/presentationAccess');
 
 function parseEventId(value) {
   const eventId = Number(value);
@@ -107,6 +108,7 @@ async function getEventExhibitors(req, res) {
         e.name,
         e.description,
         e.image_url,
+        e.team_members,
         COUNT(c.id)::int AS "categoriesCount",
         COALESCE(
           json_agg(
@@ -123,7 +125,7 @@ async function getEventExhibitors(req, res) {
         ON c.event_id = eca.event_id
        AND c.id = eca.category_id
       WHERE e.event_id = $1
-      GROUP BY e.id, e.event_id, e.name, e.description, e.image_url
+      GROUP BY e.id, e.event_id, e.name, e.description, e.image_url, e.team_members
       ORDER BY e.name
       `,
       [eventId]
@@ -158,7 +160,10 @@ async function getVotingConfig(req, res) {
        FROM events e LEFT JOIN event_settings s ON s.event_id = e.id WHERE e.id = $1`, [eventId]
     );
     if (!result.rowCount) return res.status(404).json({ success: false, message: 'Event not found' });
-    return res.json({ success: true, data: result.rows[0] });
+    return res.json({ success: true, data: {
+      ...result.rows[0],
+      requirePresentationCheck: verifyPresentationPass(readPresentationPass(req, eventId), eventId),
+    } });
   } catch (error) {
     console.error('Voting config failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to read the voting window' });

@@ -1,0 +1,52 @@
+# Create a free Neon project first and use its DIRECT connection string.
+# See DEPLOYMENT.md for the accounts, SMSGate cloud mode, and phone/QR tests.
+services:
+  - type: web
+    name: maker-collective-voting
+    runtime: node
+    branch: deployment/phone-qr
+    autoDeployTrigger: commit
+    region: frankfurt
+    plan: free
+    buildCommand: bash deploy/render-build.sh
+    startCommand: node backend/scripts/setup-deployment.js && node backend/src/server.js
+    healthCheckPath: /ready
+    envVars:
+      - key: NODE_VERSION
+        value: 22.23.2
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_FRONTEND
+        value: "true"
+      - key: VITE_API_URL
+        value: /api
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: DB_CONNECTION_TIMEOUT_MS
+        value: "15000"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: OTP_HMAC_SECRET
+        generateValue: true
+      - key: VISITOR_TOKEN_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN_SECRET
+        generateValue: true
+      - key: RATE_LIMIT_HMAC_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: makerspace
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: SMS_PROVIDER
+        value: smsgate
+      - key: SMSGATE_MODE
+        value: cloud
+      - key: SMSGATE_BASE_URL
+        value: https://api.sms-gate.app/3rdparty/v1
+      - key: SMSGATE_USERNAME
+        sync: false
+      - key: SMSGATE_PASSWORD
+        sync: false

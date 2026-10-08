@@ -1,8 +1,8 @@
-const MIN_CLUSTER_SAMPLES = 3;
-const DBSCAN_RADIUS_METERS = 75;
-const ZONE_BUFFER_METERS = 30;
+const MIN_LOCATION_SAMPLES = 1;
+const VENUE_RADIUS_METERS = 100;
 const MAX_LOCATION_ACCURACY_METERS = 100;
 const { ipIsAllowed } = require('../utils/validation');
+const { verifyPresentationPass } = require('./presentationAccess');
 
 function parseCoordinates(body) {
   const latitude = body?.latitude;
@@ -43,32 +43,35 @@ async function insertSample(client, { eventId, source, visitorId, adminId, coord
   );
 }
 
+async function saveOrganizerAnchor(client, { eventId, adminId, coordinates }) {
+  await client.query(
+    `INSERT INTO event_location_samples
+       (event_id, source, admin_id, location, accuracy_m)
+     VALUES ($1, 'organizer_anchor', $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5)
+     ON CONFLICT (event_id) WHERE source = 'organizer_anchor'
+     DO UPDATE SET admin_id = EXCLUDED.admin_id,
+                   location = EXCLUDED.location,
+                   accuracy_m = EXCLUDED.accuracy_m,
+                   created_at = CURRENT_TIMESTAMP`,
+    [
+      eventId,
+      adminId,
+      coordinates.longitude,
+      coordinates.latitude,
+      coordinates.accuracy,
+    ]
+  );
+}
+
 async function rebuildEventZone(client, eventId) {
   const result = await client.query(
-    `WITH projected AS (
-       SELECT id, source, location, ST_Transform(location, 3857) AS metric_location
-       FROM event_location_samples
-       WHERE event_id = $1
-     ), clustered AS (
-       SELECT id, source, location,
-              ST_ClusterDBSCAN(metric_location, $2, $3) OVER (ORDER BY id) AS cluster_id
-       FROM projected
-     ), anchor_cluster AS (
-       SELECT cluster_id
-       FROM clustered
-       WHERE source = 'organizer_anchor' AND cluster_id IS NOT NULL
-       LIMIT 1
-     ), zone AS (
+    `WITH zone AS (
        SELECT ST_Multi(
-                ST_Buffer(
-                  ST_ConcaveHull(ST_Collect(clustered.location), 0.8)::geography,
-                  $4
-                )::geometry
+                ST_Buffer(location::geography, $2)::geometry
               )::geometry(MultiPolygon,4326) AS geofence
-       FROM clustered
-       JOIN anchor_cluster USING (cluster_id)
-       GROUP BY clustered.cluster_id
-       HAVING COUNT(*) >= $3
+       FROM event_location_samples
+       WHERE event_id = $1 AND source = 'organizer_anchor' AND admin_id IS NOT NULL
+         AND (accuracy_m IS NULL OR accuracy_m <= $3)
      ), sample_total AS (
        SELECT COUNT(*)::integer AS total
        FROM event_location_samples
@@ -76,25 +79,26 @@ async function rebuildEventZone(client, eventId) {
      )
      UPDATE event_settings AS settings
      SET location_sample_count = sample_total.total,
-         location_zone = COALESCE(zone.geofence, settings.location_zone),
+         location_zone = zone.geofence,
          location_ready_at = CASE
-           WHEN zone.geofence IS NULL THEN settings.location_ready_at
-           ELSE CURRENT_TIMESTAMP
+           WHEN zone.geofence IS NULL THEN NULL
+           ELSE COALESCE(settings.location_ready_at, CURRENT_TIMESTAMP)
          END,
          updated_at = CURRENT_TIMESTAMP
      FROM sample_total
      LEFT JOIN zone ON TRUE
      WHERE settings.event_id = $1
      RETURNING settings.location_sample_count,
-               settings.location_ready_at IS NOT NULL AS location_ready`,
-    [eventId, DBSCAN_RADIUS_METERS, MIN_CLUSTER_SAMPLES, ZONE_BUFFER_METERS]
+               settings.location_zone IS NOT NULL AS location_ready`,
+    [eventId, VENUE_RADIUS_METERS, MAX_LOCATION_ACCURACY_METERS]
   );
 
   return result.rows[0];
 }
 
-async function checkVenueAccess(client, { eventId, settings, clientIp, coordinates }) {
+async function checkVenueAccess(client, { eventId, settings, clientIp, coordinates, presentationPass }) {
   const reject = (code, status, message) => ({ allowed: false, code, status, message });
+  if (verifyPresentationPass(presentationPass, eventId)) return { allowed: true, method: 'presentation' };
   const hasRanges = typeof settings.allowed_ip_ranges === 'string' && settings.allowed_ip_ranges.trim() !== '';
   if (hasRanges && clientIp) {
     try {
@@ -122,6 +126,10 @@ async function checkVenueAccess(client, { eventId, settings, clientIp, coordinat
     return reject('OUTSIDE_VENUE', 403, 'Voting is only available inside the venue');
   }
 
+  if (settings.location_enabled && !settings.location_ready && coordinates) {
+    return reject('LOCATION_NOT_READY', 503, 'The admin must record the venue location before location access is available; connect to the event network and try again');
+  }
+
   if (!hasRanges) {
     return reject('VENUE_ACCESS_NOT_CONFIGURED', 503, 'Venue access is not configured for this event');
   }
@@ -129,10 +137,12 @@ async function checkVenueAccess(client, { eventId, settings, clientIp, coordinat
 }
 
 module.exports = {
-  MIN_CLUSTER_SAMPLES,
+  MIN_LOCATION_SAMPLES,
+  VENUE_RADIUS_METERS,
   MAX_LOCATION_ACCURACY_METERS,
   parseCoordinates,
   insertSample,
+  saveOrganizerAnchor,
   rebuildEventZone,
   checkVenueAccess,
 };

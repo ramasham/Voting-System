@@ -20,6 +20,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [booting, setBooting] = useState(true);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [returningSession, setReturningSession] = useState<Session | null>(null);
   const [blocked, setBlocked] = useState<Blocked | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -49,7 +50,12 @@ export default function App() {
         return;
       }
       const session = await api.getMe();
-      if (session) enterSession(session);
+      if (session) {
+        if (nextConfig.requireNetworkCheck || nextConfig.requirePresentationCheck || nextConfig.requireLocation) {
+          setReturningSession(session);
+          setScreen("check");
+        } else enterSession(session);
+      }
     } catch (error) {
       setBlocked(errorCode(error) === "NETWORK" ? "offline" : "server");
     } finally {
@@ -83,6 +89,7 @@ export default function App() {
     setCountryIndex(0);
     setE164("");
     setVotes({});
+    setReturningSession(null);
     setBlocked(null);
     setScreen("welcome");
   };
@@ -106,11 +113,16 @@ export default function App() {
   }
 
   if (screen === "welcome") {
-    const needsCheck = Boolean(config && (config.requireNetworkCheck || config.requireLocation));
+    const needsCheck = Boolean(config && (config.requireNetworkCheck || config.requirePresentationCheck || config.requireLocation));
     return <Welcome lang={lang} onStart={() => setScreen(needsCheck ? "check" : "register")} setLang={setLang} />;
   }
   if (screen === "check" && config) {
-    return <OnSiteCheck config={config} lang={lang} onBack={() => setScreen("welcome")} onVerified={() => setScreen("register")} setLang={setLang} />;
+    return <OnSiteCheck config={config} lang={lang} onBack={() => setScreen("welcome")} onVerified={() => {
+      if (returningSession) {
+        enterSession(returningSession);
+        setReturningSession(null);
+      } else setScreen("register");
+    }} setLang={setLang} />;
   }
   if (screen === "register" || screen === "check") {
     return (

@@ -95,6 +95,12 @@ export const staffApi = {
       (e) => ({ ...e, id: String(e.id) }),
     )
   },
+  async currentNetwork(token: string): Promise<{ ip: string; cidr: string }> {
+    return backendRequest("/admin/network", { token })
+  },
+  async approvePresentation(token: string, event: string): Promise<void> {
+    await backendRequest(`${eventPath(event)}/presentation`, { token, method: "POST" })
+  },
   async categories(token: string, event: string): Promise<StaffCategory[]> {
     if (staffMode === "mock") {
       requireDemoToken(token)
@@ -181,15 +187,18 @@ export const staffApi = {
         name: input.name.trim(),
         description: input.description.trim(),
         image_url: input.imageUrl,
+        team_members: input.teamMembers.map((name) => name.trim()),
         labels: previous?.labels
           ? {
               ar: {
                 ...previous.labels.ar,
+                members: input.teamMembers.map((name) => name.trim()),
                 name: input.name.trim(),
                 description: input.description.trim(),
               },
               en: {
                 ...previous.labels.en,
+                members: input.teamMembers.map((name) => name.trim()),
                 name: input.name.trim(),
                 description: input.description.trim(),
               },

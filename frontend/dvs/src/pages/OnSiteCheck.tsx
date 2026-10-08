@@ -22,8 +22,8 @@ type Phase =
   | "error"
   | "ok";
 
-// Two layers: (1) network check (silent, the server compares the request IP with the venue network),
-// (2) location check (browser GPS, the server compares the coordinates with the venue radius).
+// The server accepts a presentation approval, the venue network, or an accurate
+// location inside the venue. Request GPS only when the silent check cannot verify access.
 // The decision is always made by the server, never in the browser.
 export function OnSiteCheck({
   lang,
@@ -39,7 +39,8 @@ export function OnSiteCheck({
   onVerified: () => void;
 }) {
   const t = copy[lang];
-  const [phase, setPhase] = useState<Phase>(config.requireNetworkCheck ? "network" : config.requireLocation ? "ask_location" : "ok");
+  const hasSilentCheck = Boolean(config.requireNetworkCheck || config.requirePresentationCheck);
+  const [phase, setPhase] = useState<Phase>(hasSilentCheck ? "network" : config.requireLocation ? "ask_location" : "ok");
   const [attempt, setAttempt] = useState(0);
   const [networkVerified, setNetworkVerified] = useState(false);
   const locationPending = useRef(false);
@@ -57,7 +58,7 @@ export function OnSiteCheck({
       .then(() => {
         if (!alive) return;
         setNetworkVerified(true);
-        setPhase(config.requireLocation ? "ask_location" : "ok");
+        setPhase("ok");
       })
       .catch((error) => alive && setPhase(errorCode(error) === "OFF_SITE_NETWORK" ? config.requireLocation ? "ask_location" : "wrong_network" : "error"));
     return () => {
@@ -178,9 +179,9 @@ export function OnSiteCheck({
   if (phase === "inaccurate")
     return <StateScreen {...common} action={{ label: t.retry, onClick: askLocation }} body={t.locationInaccurateBody} icon="pin" title={t.locationInaccurateTitle} tone="yellow" />;
   if (phase === "not_ready")
-    return <StateScreen {...common} action={{ label: t.retry, onClick: config.requireNetworkCheck ? retryNetwork : askLocation }} body={t.locationNotReadyBody} icon="pin" title={t.locationNotReadyTitle} tone="yellow" />;
+    return <StateScreen {...common} action={{ label: t.retry, onClick: hasSilentCheck ? retryNetwork : askLocation }} body={t.locationNotReadyBody} icon="pin" title={t.locationNotReadyTitle} tone="yellow" />;
   if (phase === "off_site") return <StateScreen {...common} body={t.offSiteBody} icon="pin" title={t.offSiteTitle} tone="error" action={{ label: t.retry, onClick: askLocation }} />;
   if (phase === "error")
-    return <StateScreen {...common} action={{ label: t.retry, onClick: config.requireNetworkCheck ? retryNetwork : askLocation }} body={t.serverBody} icon="alert" title={t.serverTitle} tone="error" />;
+    return <StateScreen {...common} action={{ label: t.retry, onClick: hasSilentCheck ? retryNetwork : askLocation }} body={t.serverBody} icon="alert" title={t.serverTitle} tone="error" />;
   return <StateScreen lang={lang} setLang={setLang} onBack={onBack} body={t.siteOkBody} icon="check" title={t.siteOkTitle} tone="success" />;
 }
